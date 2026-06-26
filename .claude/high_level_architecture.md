@@ -97,9 +97,10 @@ graph TD
 
 ### Location Service
 - Receives location updates pushed by client devices
-- Persists location to PostgreSQL + PostGIS (source of truth)
-- Caches latest location per user in Redis for low-latency reads
-- Publishes to Kafka topic `location.updates` for WebSocket fanout
+- On each location update, writes sequentially:
+  1. Persists to PostgreSQL + PostGIS (source of truth) and updates Redis cache
+  2. Publishes to Kafka topic `location.updates` for WebSocket fanout
+  - If the Kafka publish fails, the location is still stored; the next device update self-corrects the missed push. This is acceptable given the 30-second consistency NFR.
 - Exposes query endpoint for last known location of all users in a group (reads from Redis cache, falls back to PostgreSQL)
 - Supports geospatial queries via PostGIS:
   - Group centerpoint (`ST_Centroid` + `ST_Collect` over member locations)
