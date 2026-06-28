@@ -57,7 +57,6 @@ graph TD
     LocationSvc -->|"location:group:{id}"| RedisPubSub
 
     GroupSvc -->|"group.events"| Kafka
-    LocationSvc -->|"location.updates\n(durability)"| Kafka
 
     Kafka -->|"group.events"| NotifSvc
     RedisPubSub -->|"targeted fanout"| WSSvc
@@ -102,7 +101,6 @@ graph TD
 - On each location update, writes sequentially:
   1. Persists to PostgreSQL + PostGIS (source of truth) and updates Redis location cache
   2. Resolves the user's group memberships from Redis cache, then publishes to a Redis Pub/Sub channel per group (`location:group:{groupId}`) for real-time WebSocket fanout
-  3. Publishes to Kafka topic `location.updates` for durability and audit trail
   - If the Redis Pub/Sub publish fails, the location is still stored; the next device update self-corrects the missed push. This is acceptable given the 30-second consistency NFR.
 - Exposes query endpoint for last known location of all users in a group (reads from Redis cache, falls back to PostgreSQL)
 - Supports geospatial queries via PostGIS:
@@ -164,7 +162,6 @@ PostGIS enables:
 | Topic | Producer | Consumer | Purpose |
 |-------|----------|----------|---------|
 | `group.events` | Group Service | Notification Service | Trigger FCM/email/SMS on invite, promote, demote events |
-| `location.updates` | Location Service | — | Durability and audit trail for location events; real-time WebSocket fanout is handled by Redis Pub/Sub instead |
 
 ---
 
@@ -188,7 +185,7 @@ PostGIS enables:
 | Location sharing toggle highly consistent | Synchronous write to PostgreSQL; no cache layer for `locationSharingEnabled` field |
 | Remove user from group highly available and consistent | Synchronous write to PostgreSQL in Group Service |
 | Demote owner highly available and consistent | Synchronous write to PostgreSQL in Group Service |
-| Location updates highly available, consistent within 30s | Write to PostgreSQL + Redis cache; publish to Redis Pub/Sub per group for real-time WebSocket push; Kafka for durability |
+| Location updates highly available, consistent within 30s | Write to PostgreSQL + Redis cache; publish to Redis Pub/Sub per group for real-time WebSocket push |
 | Live location reads, max 5 min delay | Served from Redis location cache; cache TTL aligned to 30s location update consistency window |
 | Notifications max 5 min delay | Async via Kafka `group.events` → Notification Service → FCM / Email / SMS |
 | Group metadata eventually consistent (5 min) | Written to PostgreSQL; no strict cache invalidation required within tolerance |
