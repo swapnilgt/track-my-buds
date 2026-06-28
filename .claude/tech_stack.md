@@ -12,6 +12,8 @@
 |---------|--------|
 | Language / Framework | Java / Spring Boot |
 | Architecture style | Microservices |
+| Mapping library | MapStruct |
+| Testing | JUnit 5 + Mockito |
 
 ## Data Stores
 | Concern | Choice | Notes |
