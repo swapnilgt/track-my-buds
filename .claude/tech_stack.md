@@ -17,13 +17,15 @@
 | Concern | Choice | Notes |
 |---------|--------|-------|
 | Primary database | PostgreSQL + PostGIS | User, group, membership, and location data. PostGIS for geospatial queries. |
-| Cache | Redis | Latest known location per user for fast reads |
-| Message queue | Kafka | `group.events` for notification fanout; `location.updates` for WebSocket fanout |
+| Location cache | Redis | Latest known location per user and user group membership list for fast reads |
+| Location fanout | Redis Pub/Sub | One channel per group (`location:group:{groupId}`); targeted real-time fanout to WebSocket instances |
+| Message queue | Kafka | `group.events` for async notification fanout to FCM / email / SMS |
 
 ## Real-time Communication
 | Concern | Choice |
 |---------|--------|
-| Live location delivery | WebSockets |
+| Live location delivery to clients | WebSockets |
+| Location fanout across WebSocket instances | Redis Pub/Sub |
 
 ## External Services
 | Concern | Choice | Notes |

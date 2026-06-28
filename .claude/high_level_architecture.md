@@ -109,13 +109,15 @@ graph TD
 
 ### WebSocket Service
 - Maintains persistent WebSocket connections with active clients
-- Maintains an in-memory map of `groupId → set of locally connected userIds`
+- Maintains a **reference count per Redis Pub/Sub channel** to manage subscribe/unsubscribe lifecycle
 - When a client subscribes to a group's live location:
   1. Verifies group membership once via Group Service
-  2. Adds the client to the local in-memory map
-  3. Subscribes to Redis Pub/Sub channel `location:group:{groupId}` if not already subscribed
-- When all local clients for a group disconnect, unsubscribes from that group's Redis Pub/Sub channel
-- Receives only events for groups that have at least one locally connected subscriber — no wasted processing of irrelevant group events
+  2. Registers a callback on Redis Pub/Sub channel `location:group:{groupId}` that pushes directly to this client's WebSocket connection; Redis handles routing natively
+  3. Increments the ref count for that channel; subscribes to the Redis channel only if ref count goes from 0 → 1
+- When a client disconnects or unsubscribes from a group:
+  1. Decrements the ref count for that channel
+  2. Unsubscribes from the Redis channel only when ref count reaches 0
+- Receives only events for channels with active local subscribers — no wasted processing of irrelevant group events
 
 ### Notification Service
 - Consumes `group.events` from Kafka

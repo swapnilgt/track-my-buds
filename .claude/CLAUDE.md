@@ -7,6 +7,7 @@
 - All the code related to user facing app should be inside `../client-app` folder.
 - All the code related to backend services should be inside `../backend` folder.
 - Refer to `generic_coding_guidelines.md` for generic coding guidelines.
+- Whenever updating a document, figure out if the change needs to be done in other related documents as well and make those changes.
 
 
 ## Dont's
