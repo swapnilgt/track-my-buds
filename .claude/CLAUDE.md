@@ -6,6 +6,7 @@
 - When structuring code and config files in the repo, do it in a way so that I can easily move the code for different services and frontend application in different repositories if needed.
 - All the code related to user facing app should be inside `../client-app` folder.
 - All the code related to backend services should be inside `../backend` folder.
+- Refer to `generic_coding_guidelines.md` for generic coding guidelines.
 
 
 ## Dont's
