@@ -1,7 +1,7 @@
 # High Level Architecture
 
 ## Overview
-Track My Buds is built on a microservices architecture with a Flutter mobile client. Services communicate via REST over HTTPS for standard operations, WebSockets for real-time location delivery, and Kafka for async event streaming between services.
+Track My Buds is built on a microservices architecture with a Flutter mobile client. Services communicate via REST over HTTPS for standard operations, WebSockets for real-time location delivery, Redis Pub/Sub for targeted location fanout across WebSocket instances, and Kafka for async event streaming between services.
 
 ---
 
@@ -26,7 +26,8 @@ graph TD
 
     subgraph Data Stores
         PG[("PostgreSQL + PostGIS")]
-        Redis[("Redis (cache)")]
+        RedisCache[("Redis\n(location cache)")]
+        RedisPubSub[("Redis Pub/Sub\n(location fanout)")]
         Kafka[["Kafka"]]
     end
 
@@ -52,13 +53,14 @@ graph TD
     UserSvc --> PG
     GroupSvc --> PG
     LocationSvc --> PG
-    LocationSvc --> Redis
+    LocationSvc --> RedisCache
+    LocationSvc -->|"location:group:{id}"| RedisPubSub
 
     GroupSvc -->|"group.events"| Kafka
-    LocationSvc -->|"location.updates"| Kafka
+    LocationSvc -->|"location.updates\n(durability)"| Kafka
 
     Kafka -->|"group.events"| NotifSvc
-    Kafka -->|"location.updates"| WSSvc
+    RedisPubSub -->|"targeted fanout"| WSSvc
 
     WSSvc -->|"live location push"| App
 
@@ -98,9 +100,10 @@ graph TD
 ### Location Service
 - Receives location updates pushed by client devices
 - On each location update, writes sequentially:
-  1. Persists to PostgreSQL + PostGIS (source of truth) and updates Redis cache
-  2. Publishes to Kafka topic `location.updates` for WebSocket fanout
-  - If the Kafka publish fails, the location is still stored; the next device update self-corrects the missed push. This is acceptable given the 30-second consistency NFR.
+  1. Persists to PostgreSQL + PostGIS (source of truth) and updates Redis location cache
+  2. Resolves the user's group memberships from Redis cache, then publishes to a Redis Pub/Sub channel per group (`location:group:{groupId}`) for real-time WebSocket fanout
+  3. Publishes to Kafka topic `location.updates` for durability and audit trail
+  - If the Redis Pub/Sub publish fails, the location is still stored; the next device update self-corrects the missed push. This is acceptable given the 30-second consistency NFR.
 - Exposes query endpoint for last known location of all users in a group (reads from Redis cache, falls back to PostgreSQL)
 - Supports geospatial queries via PostGIS:
   - Group centerpoint (`ST_Centroid` + `ST_Collect` over member locations)
@@ -108,8 +111,13 @@ graph TD
 
 ### WebSocket Service
 - Maintains persistent WebSocket connections with active clients
-- Consumes `location.updates` from Kafka
-- Fans out location updates to all connected clients who are members of the relevant group
+- Maintains an in-memory map of `groupId → set of locally connected userIds`
+- When a client subscribes to a group's live location:
+  1. Verifies group membership once via Group Service
+  2. Adds the client to the local in-memory map
+  3. Subscribes to Redis Pub/Sub channel `location:group:{groupId}` if not already subscribed
+- When all local clients for a group disconnect, unsubscribes from that group's Redis Pub/Sub channel
+- Receives only events for groups that have at least one locally connected subscriber — no wasted processing of irrelevant group events
 
 ### Notification Service
 - Consumes `group.events` from Kafka
@@ -137,10 +145,17 @@ PostGIS enables:
 - `<->` KNN operator — find nearest pinned location to group centerpoint
 - `SUM(ST_Distance(...))` — find pinned location with minimum total distance to all members
 
-### Redis
-- Stores latest known location per user as a cache
+### Redis — Location Cache
+- Stores latest known location per user
 - Used by Location Service for fast reads when serving live group location view
+- Also caches each user's group membership list, used by Location Service to resolve which Pub/Sub channels to publish to on each location update
 - PostgreSQL is the source of truth; Redis is eviction-tolerant
+
+### Redis — Pub/Sub
+- One channel per group: `location:group:{groupId}`
+- Used as the real-time fanout layer between Location Service and WebSocket Service instances
+- Messages are fire-and-forget — not persisted; a missed publish self-corrects on the next location update from the device
+- WebSocket instances subscribe only to channels for groups they have active local subscribers in, keeping per-instance load proportional to active connections rather than total group count
 
 ---
 
@@ -149,7 +164,7 @@ PostGIS enables:
 | Topic | Producer | Consumer | Purpose |
 |-------|----------|----------|---------|
 | `group.events` | Group Service | Notification Service | Trigger FCM/email/SMS on invite, promote, demote events |
-| `location.updates` | Location Service | WebSocket Service | Fan out location updates to connected clients across WebSocket server instances |
+| `location.updates` | Location Service | — | Durability and audit trail for location events; real-time WebSocket fanout is handled by Redis Pub/Sub instead |
 
 ---
 
@@ -173,8 +188,8 @@ PostGIS enables:
 | Location sharing toggle highly consistent | Synchronous write to PostgreSQL; no cache layer for `locationSharingEnabled` field |
 | Remove user from group highly available and consistent | Synchronous write to PostgreSQL in Group Service |
 | Demote owner highly available and consistent | Synchronous write to PostgreSQL in Group Service |
-| Location updates highly available, consistent within 30s | Write to PostgreSQL + Redis cache; Kafka → WebSocket Service fans out within tolerance |
-| Live location reads, max 5 min delay | Served from Redis cache; cache TTL aligned to 30s location update consistency window |
+| Location updates highly available, consistent within 30s | Write to PostgreSQL + Redis cache; publish to Redis Pub/Sub per group for real-time WebSocket push; Kafka for durability |
+| Live location reads, max 5 min delay | Served from Redis location cache; cache TTL aligned to 30s location update consistency window |
 | Notifications max 5 min delay | Async via Kafka `group.events` → Notification Service → FCM / Email / SMS |
 | Group metadata eventually consistent (5 min) | Written to PostgreSQL; no strict cache invalidation required within tolerance |
 | User self-remove eventually consistent (5 min) | Written to PostgreSQL; propagated asynchronously |
