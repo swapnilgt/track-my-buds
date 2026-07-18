@@ -4,6 +4,7 @@
 - For backend services, use the `clean_arch_backend_developer_context.md` on decision regarding the low level design and directory structure.
 - High level architecture details are available in `high_level_architecture.md`.
 - Domain model (entities, fields, relationships, business rules) is available in `domain_model.md`.
+- Client-facing REST/WebSocket API contract is available in `api_contract.md`.
 - Environment setup details (local, pre-production, production) are available in `environments.md`.
 - Open gaps and decisions to close before/during implementation are tracked in `implementation_readiness_checklist.md`.
 - When structuring code and config files in the repo, do it in a way so that I can easily move the code for different services and frontend application in different repositories if needed.

@@ -8,11 +8,12 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` closed
 
 ## Major — close before / early in implementation
 
-### [ ] 1. API contract
+### [~] 1. API contract
 - **Gap:** No endpoint specification exists — no URLs, request/response shapes, standard error body, pagination format, or API versioning convention.
 - **Why it matters:** The Flutter app and the six backend services cannot be built in parallel without an agreed contract. The clean-arch backend doc already assumes DTOs exist without defining them.
-- **Target document:** New `api_contract.md` (or per-service API sections).
-- **To decide:** URL structure and versioning (e.g. `/api/v1/...`), standard error response JSON, pagination format for list endpoints, how `userId` is supplied to endpoints.
+- **Target document:** `api_contract.md` — **drafted.**
+- **Decided:** path versioning (`/api/v1`); bare-resource responses with `{ items, page }` for lists; RFC 7807 Problem Details for errors; page/offset pagination (`?page&size`); all endpoints across Auth/User/Group/Location + the live-location WebSocket are specified.
+- **Still open (depends on #2):** token-exchange details, JWT claims, and the trusted `X-User-Id` propagation are provisional until the auth flow is finalised. Finalise these, then flip to `[x]`.
 
 ### [ ] 2. Authentication & authorization flow
 - **Gap:** Architecture says Auth Service "issues JWT" and Gateway "validates JWT," but the mechanics are undefined.
@@ -36,11 +37,9 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` closed
 - **Target document:** `high_level_architecture.md` (Kafka section) + a schema definition.
 - **To decide:** Event type enum (invite / accept / promote / demote / remove), full field list, and whether contact details are embedded in the event or fetched on consume.
 
-### [ ] 5. Location-update transport
-- **Gap:** "Client devices push location updates" — but over REST POST or over the existing WebSocket? At what cadence?
-- **Why it matters:** Affects both the Location Service API surface and the client implementation.
-- **Target document:** `high_level_architecture.md` + `api_contract.md`.
-- **To decide:** Transport (REST vs WebSocket), update frequency / batching, payload shape.
+### [x] 5. Location-update transport
+- **Decided:** REST `POST /api/v1/locations` to Location Service through the Gateway, returning `202 Accepted`. The WebSocket stays receive-only for live location. Specified in `api_contract.md` §5.
+- **Still open:** update cadence / batching on the client side — a client-implementation detail, not a contract blocker.
 
 ### [ ] 6. API Gateway technology
 - **Gap:** The Gateway is a core component but absent from `tech_stack.md`.
