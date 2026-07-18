@@ -39,6 +39,62 @@ Whenever generating code, use the structure described in this document.
 
 ---
 
+## Observability
+
+### Metrics
+- Spring Boot Actuator is enabled on all services. It exposes:
+    - `/actuator/health` — liveness and readiness checks (database, Redis, Kafka connectivity).
+    - `/actuator/prometheus` — Prometheus-format metrics scraped by the Prometheus container.
+- Micrometer collects the following automatically — no custom code required:
+    - JVM metrics (heap, GC, thread count)
+    - HTTP request metrics (request rate, latency percentiles, error rate) per endpoint
+    - Database connection pool metrics (HikariCP)
+    - Kafka producer / consumer metrics
+- Custom business metrics (e.g. location updates per second, active WebSocket connections) are added via `MeterRegistry` injection where needed.
+
+### Distributed Tracing
+- Micrometer Tracing with the Brave bridge is enabled on all services.
+- A `traceId` and `spanId` are automatically injected into the MDC and appear in every log line — no manual code required.
+- Trace context is propagated across service calls via HTTP headers (`b3` propagation format) automatically by the Spring Boot instrumentation.
+- Spans are sent to Zipkin for visualisation.
+
+### Health Checks
+- Spring Boot Actuator auto-configures health indicators for PostgreSQL, Redis, and Kafka.
+- `/actuator/health` returns the overall service status and the status of each dependency.
+- In preprod and prod, this endpoint is accessible via the API Gateway only — not exposed directly.
+
+---
+
+## Logging
+
+- Use the SLF4J API exclusively — never reference Logback classes directly. Declare loggers as:
+  ```java
+  private static final Logger log = LoggerFactory.getLogger(ClassName.class);
+  ```
+- Always use parameterised log statements — never string concatenation:
+  ```java
+  log.info("Location updated for user {}", userId);   // correct
+  log.info("Location updated for user " + userId);    // wrong
+  ```
+- Never log sensitive data: passwords, auth tokens, raw location history in bulk.
+
+### What each layer logs
+
+| Layer | What to log | Level |
+|-------|------------|-------|
+| `adapter/in/web` | Request entry (HTTP method, path, authenticated userId); validation failures | INFO / WARN |
+| `domain/usecase` | Key business events (e.g. "User {} joined group {}"); use case failures | INFO / ERROR |
+| `adapter/out/persistence` | Slow query warnings; query failures with exception | WARN / ERROR |
+| `adapter/out/cache` | Cache miss events; Redis failures with exception | DEBUG / ERROR |
+| `adapter/out/web` | External API call failures with status code and exception | ERROR |
+| `adapter/out/messaging` | Kafka publish failures with exception | ERROR |
+
+### Log format by environment
+- **Local** — plain text (human-readable in terminal). Configured in `application-local.yml`.
+- **Pre-production / Production** — structured JSON via Logstash Logback Encoder. Each log line is a JSON object with `timestamp`, `level`, `logger`, `message`, `traceId`, and any MDC fields (e.g. `userId`, `groupId`). Configured in `application-preprod.yml` and `application-prod.yml`.
+
+---
+
 ## Dependency Injection
 - Spring Boot's built-in DI is used — no external DI library required.
 - Always use **constructor injection**. Never use field injection (`@Autowired` on fields).
@@ -104,6 +160,9 @@ backend/<service-name>/
 ## 5. Setup — Run below steps when asked to run the basic setup.
 - Create the folder structure as described above for the service.
 - Add Spring Boot starter dependencies in `pom.xml`: `spring-boot-starter-web`, `spring-boot-starter-data-jpa`, `spring-boot-starter-validation`.
+- Add `spring-boot-starter-actuator` and `micrometer-registry-prometheus` to `pom.xml` for metrics and health checks.
+- Add `micrometer-tracing-bridge-brave` and `zipkin-reporter-brave` to `pom.xml` for distributed tracing.
+- Add `logstash-logback-encoder` to `pom.xml` for structured JSON logging in preprod and prod.
 - Add `spring-boot-starter-test`, `mockito-core` in test scope in `pom.xml`.
 - Add MapStruct dependency in `pom.xml` with the annotation processor configured.
 - Create `application.yml` and environment-specific yml files under `src/main/resources/`.

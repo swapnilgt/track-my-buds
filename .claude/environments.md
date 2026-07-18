@@ -18,6 +18,9 @@ Three environments are maintained: local, pre-production, and production. Cloud 
 | Kafka | Single broker container with a Zookeeper container |
 | All backend services | Individual containers via Docker Compose |
 | API Gateway | Single container |
+| Prometheus | Single container — scrapes `/actuator/prometheus` from all services |
+| Grafana | Single container — queries Prometheus; pre-configured dashboards for JVM, HTTP, and DB metrics |
+| Zipkin | Single container — receives trace spans and visualises request flows across services |
 
 ### External Services
 | Service | Local Behaviour |
@@ -51,6 +54,9 @@ Three environments are maintained: local, pre-production, and production. Cloud 
 | Kafka | Single broker |
 | Backend services | Single instance per service |
 | API Gateway | Single instance |
+| Prometheus | Single instance |
+| Grafana | Single instance |
+| Zipkin | Single instance |
 
 ### External Services
 | Service | Pre-Production Behaviour |
@@ -84,6 +90,9 @@ Three environments are maintained: local, pre-production, and production. Cloud 
 | Kafka | Single broker | Expand to multi-broker cluster when load requires |
 | Backend services | Single instance per service | Add auto-scaling and load balancing when load requires |
 | API Gateway | Single instance | Add load balancing when load requires |
+| Prometheus | Single instance | Move to cloud-managed (e.g. AWS Managed Prometheus) when load requires |
+| Grafana | Single instance | Move to cloud-managed Grafana when load requires |
+| Zipkin | Single instance | Move to cloud-managed tracing (e.g. AWS X-Ray, Jaeger) when load requires |
 
 ### External Services
 | Service | Production Behaviour |
@@ -117,6 +126,10 @@ Three environments are maintained: local, pre-production, and production. Cloud 
 | Email | Mailhog (local) | Sandbox mode | Production mode |
 | SMS | Console stub | Test mode | Production mode |
 | Logging level | Debug | Info | Warn |
+| Logging format | Plain text (human-readable in terminal) | JSON via Logstash encoder | JSON via Logstash encoder |
+| Metrics | Prometheus + Grafana containers | Single Prometheus + Grafana instance | Single Prometheus + Grafana instance (cloud-managed later) |
+| Distributed tracing | Zipkin container | Single Zipkin instance | Single Zipkin instance (cloud-managed later) |
+| Health checks | `/actuator/health` on localhost | `/actuator/health` via API Gateway only | `/actuator/health` via API Gateway only |
 | Secrets | `.env` file | Env vars at deploy | Secrets manager (TBD) |
 | Real user data | No | No (synthetic only) | Yes |
 | Infrastructure port exposure | Yes (localhost only) | No (VPN / SSH tunnel only) | No |
