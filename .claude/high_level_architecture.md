@@ -29,6 +29,7 @@ graph TD
         RedisCache[("Redis\n(location cache)")]
         RedisPubSub[("Redis Pub/Sub\n(location fanout)")]
         Kafka[["Kafka"]]
+        Blob[("MinIO\n(avatar object store)")]
     end
 
     subgraph External Services
@@ -51,7 +52,9 @@ graph TD
 
     AuthSvc --> PG
     UserSvc --> PG
+    UserSvc -->|"avatar upload"| Blob
     GroupSvc --> PG
+    GroupSvc -->|"avatar upload"| Blob
     LocationSvc --> PG
     LocationSvc --> RedisCache
     LocationSvc -->|"location:group:{id}"| RedisPubSub
@@ -138,12 +141,10 @@ Primary database for all persistent data.
 | Users | Profile fields, auth metadata |
 | Groups | Name, avatar |
 | Group Memberships | User ↔ Group association, ownership flag |
-| Location history | lat, long, timestamp per user; PostGIS geometry column for spatial queries |
+| Latest user location | One row per user (upserted on each update); lat, long, PostGIS geometry column for spatial queries. No location history — only current position is stored. |
 
 PostGIS enables:
-- `ST_Centroid` + `ST_Collect` — compute centerpoint of all group members' locations
-- `<->` KNN operator — find nearest pinned location to group centerpoint
-- `SUM(ST_Distance(...))` — find pinned location with minimum total distance to all members
+- `ST_Centroid` + `ST_Collect` — compute centerpoint of all group members' current locations
 
 ### Redis — Location Cache
 - Stores latest known location per user
@@ -156,6 +157,13 @@ PostGIS enables:
 - Used as the real-time fanout layer between Location Service and WebSocket Service instances
 - Messages are fire-and-forget — not persisted; a missed publish self-corrects on the next location update from the device
 - WebSocket instances subscribe only to channels for groups they have active local subscribers in, keeping per-instance load proportional to active connections rather than total group count
+
+### MinIO — Object Store
+- S3-compatible object store for binary assets — currently user and group avatar images.
+- **Upload:** the client requests a pre-signed upload URL from the owning service (User Service for user avatars, Group Service for group avatars), then uploads the image directly to MinIO. Large binaries never pass through the services.
+- **Persistence:** the service stores only the resulting object key / URL on the entity (`User.avatarUrl`, `Group.avatarUrl`) in PostgreSQL — the image bytes live only in the object store.
+- **Serve:** avatars are served to clients via the object store URL (pre-signed for private buckets, or direct for public read) — not proxied through the services.
+- S3 API compatibility means the same client code targets MinIO locally and any managed S3-compatible store in the cloud with only an endpoint change.
 
 ---
 

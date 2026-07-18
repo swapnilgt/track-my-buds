@@ -16,6 +16,7 @@ Three environments are maintained: local, pre-production, and production. Cloud 
 | PostgreSQL + PostGIS | Single container |
 | Redis | Single container (serves both location cache and Pub/Sub) |
 | Kafka | Single broker container with a Zookeeper container |
+| MinIO | Single container (S3-compatible object store for avatars); console UI exposed on localhost |
 | All backend services | Individual containers via Docker Compose |
 | API Gateway | Single container |
 | Prometheus | Single container — scrapes `/actuator/prometheus` from all services |
@@ -52,6 +53,7 @@ Three environments are maintained: local, pre-production, and production. Cloud 
 | PostgreSQL + PostGIS | Single instance (no read replicas) |
 | Redis | Single instance |
 | Kafka | Single broker |
+| MinIO | Single instance, or a managed S3-compatible store |
 | Backend services | Single instance per service |
 | API Gateway | Single instance |
 | Prometheus | Single instance |
@@ -88,6 +90,7 @@ Three environments are maintained: local, pre-production, and production. Cloud 
 | PostgreSQL + PostGIS | Single instance | Add read replicas and HA failover when load requires |
 | Redis | Single instance | Move to replicated / clustered setup when load requires |
 | Kafka | Single broker | Expand to multi-broker cluster when load requires |
+| Object storage | Managed S3-compatible store (AWS S3 / GCS / R2 — TBD), or self-hosted MinIO | Choose the managed store once the cloud platform is decided |
 | Backend services | Single instance per service | Add auto-scaling and load balancing when load requires |
 | API Gateway | Single instance | Add load balancing when load requires |
 | Prometheus | Single instance | Move to cloud-managed (e.g. AWS Managed Prometheus) when load requires |
@@ -122,6 +125,7 @@ Three environments are maintained: local, pre-production, and production. Cloud 
 | PostgreSQL | Single container | Single instance | Single instance (replicas added later) |
 | Redis | Single container | Single instance | Single instance (clustering added later) |
 | Kafka | Single broker | Single broker | Single broker (multi-broker added later) |
+| Object storage | MinIO container | MinIO instance or managed store | Managed S3-compatible store (TBD) |
 | Firebase | Emulator Suite | Separate project | Production project |
 | Email | Mailhog (local) | Sandbox mode | Production mode |
 | SMS | Console stub | Test mode | Production mode |

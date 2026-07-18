@@ -28,6 +28,7 @@
 | Location cache | Redis | Latest known location per user and user group membership list for fast reads |
 | Location fanout | Redis Pub/Sub | One channel per group (`location:group:{groupId}`); targeted real-time fanout to WebSocket instances |
 | Message queue | Kafka | `group.events` for async notification fanout to FCM / email / SMS |
+| Blob / object storage | MinIO (S3-compatible) | Stores user and group avatar images. S3 API means the same client code works against MinIO locally and any managed S3-compatible store in the cloud (AWS S3 / GCS / R2 — TBD for preprod/prod) |
 
 ## Real-time Communication
 | Concern | Choice |
