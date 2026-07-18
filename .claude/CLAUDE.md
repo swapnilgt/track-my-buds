@@ -5,6 +5,7 @@
 - High level architecture details are available in `high_level_architecture.md`.
 - Domain model (entities, fields, relationships, business rules) is available in `domain_model.md`.
 - Environment setup details (local, pre-production, production) are available in `environments.md`.
+- Open gaps and decisions to close before/during implementation are tracked in `implementation_readiness_checklist.md`.
 - When structuring code and config files in the repo, do it in a way so that I can easily move the code for different services and frontend application in different repositories if needed.
 - All the code related to user facing app should be inside `../client-app` folder.
 - All the code related to backend services should be inside `../backend` folder.
