@@ -19,10 +19,11 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` closed
 - **Gap:** Architecture says Auth Service "issues JWT" and Gateway "validates JWT," but the mechanics are undefined.
 - **Why it matters:** Every secured endpoint depends on this; retrofitting auth is expensive.
 - **Target document:** `high_level_architecture.md` (flow) + `api_contract.md` (headers/claims).
+- **Decided:** Profile creation is owned by **User Service**, not Auth Service. Auth Service only mints `userId` and creates the `AUTH_CREDENTIAL` mapping on first login; the `USER` profile is created just-in-time during onboarding via `POST /users/me`. Auth and User rows share the same `userId`.
 - **To decide:**
     - How a Firebase token is exchanged for the app's own JWT.
     - JWT claims (userId, activation state?), token expiry, refresh-token strategy.
-    - How `userId` is propagated from Gateway to downstream services (trusted header?).
+    - How `userId` is propagated from Gateway to downstream services (trusted header — provisionally `X-User-Id`).
     - Authorization model for owner-only actions — how Group Service verifies the caller holds the `OWNER` role before invite / promote / demote / remove.
 
 ### [ ] 3. Membership data propagation to Redis

@@ -19,7 +19,7 @@ Client-facing REST contract for all backend services, exposed through the API Ga
 - `me` in a path always resolves to the caller's `X-User-Id`.
 
 ### Activation gate
-- Until a user has set a `username`, the Gateway allows only: the token-exchange endpoints (§2), `GET /users/me`, and `PUT /users/me/username`.
+- Until a user has created their profile, the Gateway allows only: the token-exchange endpoints (§2), `POST /users/me` (create profile), and `GET /users/me`.
 - Any other endpoint returns `403` with `type: "https://trackmybuds/errors/account-not-activated"` while the account is inactive.
 
 ### Content types
@@ -77,11 +77,11 @@ Client-facing REST contract for all backend services, exposed through the API Ga
 
 ## 2. Auth Service — `/api/v1/auth`
 
-Handles token exchange. The client authenticates the user with Firebase (phone OTP or Google SSO) on-device, obtains a Firebase ID token, and exchanges it here for the app's own JWT. On first exchange for a new identity, a `User` is created (inactive until a username is set).
+Handles authentication and token issuance only — it does **not** own the user profile. The client authenticates with Firebase (phone OTP or Google SSO) on-device, obtains a Firebase ID token, and exchanges it here for the app's own JWT. On first exchange for a new identity, Auth Service mints the app `userId` and creates the `AUTH_CREDENTIAL` mapping (`firebaseUid → userId`) — nothing more. The `USER` profile is created separately by User Service during onboarding (§3).
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/auth/token` | None | Exchange a Firebase ID token for app tokens. Creates the user on first login. |
+| POST | `/auth/token` | None | Exchange a Firebase ID token for app tokens. On first login, mints `userId` and creates the credential mapping — no profile. |
 | POST | `/auth/token/refresh` | None | Exchange a refresh token for a new access token. |
 | POST | `/auth/logout` | Bearer | Revoke the caller's refresh token. |
 
@@ -99,16 +99,18 @@ Handles token exchange. The client authenticates the user with Firebase (phone O
   "activated": false
 }
 ```
-- `activated` is `false` until the user has set a username, signalling the client to route to the username-setup screen.
+- `activated` is `false` until the user has created their profile (§3), signalling the client to route to onboarding.
 
 ---
 
 ## 3. User Service — `/api/v1/users`
 
+Owns the user profile for its entire lifecycle, including **first-time creation**. The profile is keyed by the `userId` minted by Auth Service (supplied via `X-User-Id`), so the `AUTH_CREDENTIAL` and `USER` rows always share the same id.
+
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/users/me` | Bearer | Get the caller's own profile. |
-| PUT | `/users/me/username` | Bearer | Set the username (one-time; activates the account). |
+| POST | `/users/me` | Bearer | Create the caller's profile (onboarding). Sets the immutable `username`; activates the account. |
+| GET | `/users/me` | Bearer | Get the caller's own profile (`404` before creation). |
 | PATCH | `/users/me` | Bearer | Update `name`, `email`, `avatarUrl`. Never `username` or `phoneNumber`. |
 | PUT | `/users/me/location-sharing` | Bearer | Toggle `locationSharingEnabled` (highly consistent). |
 | PUT | `/users/me/phone` | Bearer | Update phone number; requires a Firebase ID token proving ownership of the new number. |
@@ -128,7 +130,15 @@ Handles token exchange. The client authenticates the user with Firebase (phone O
 }
 ```
 
-**PUT `/users/me/username`** — `{ "username": "asha_k" }` → `200` profile, or `409` if taken / already set.
+**POST `/users/me`** (onboarding — create profile)
+```json
+// request
+{ "username": "asha_k", "name": "Asha", "email": "asha@example.com" }
+
+// 201 Created → profile; activates the account
+```
+- `username` and `name` are required; `email` and `avatarUrl` are optional. `username` is immutable once set.
+- Returns `409` if a profile already exists for this `userId` or the username is taken.
 
 **PUT `/users/me/location-sharing`** — `{ "enabled": false }` → `200` profile. Written synchronously (no eventual-consistency tolerance).
 

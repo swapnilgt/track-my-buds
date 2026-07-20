@@ -102,7 +102,7 @@ Owned by **Auth Service**. Stores the mapping between the app's `userId` and Fir
 
 | Field | Type | Constraints | Notes |
 |-------|------|-------------|-------|
-| userId | UUID | PK | Matches `User.id` — created in the same registration transaction |
+| userId | UUID | PK | Matches `User.id`. Auth Service mints this id when creating the credential on first login; User Service later creates the `USER` row with the same id during onboarding |
 | firebaseUid | VARCHAR | Unique, not null | Firebase user identifier used to validate tokens |
 | phoneNumber | VARCHAR | Nullable | Used to look up a credential during the OTP flow |
 | googleEmail | VARCHAR | Nullable | Used to look up a credential during the Google SSO flow |
