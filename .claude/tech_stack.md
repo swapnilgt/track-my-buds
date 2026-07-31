@@ -44,3 +44,5 @@
 | Push notifications | Firebase Cloud Messaging (FCM) | In-app push notifications |
 | Email notifications | TBD | Used for group invite and ownership change events |
 | SMS notifications | TBD | Used for group invite and ownership change events |
+
+> **Authentication model:** The app consumes the identity provider's tokens directly (verified at the API Gateway) rather than issuing its own JWTs. Firebase Auth is the current provider but is accessed behind a provider-agnostic identity interface — no API, service, downstream interface, or data model exposes Firebase-specific types, so the provider can be swapped later. Server-initiated logout is supported via the provider (Firebase Admin SDK today). See `high_level_architecture.md` and `api_contract.md`. Can be revisited if the product scales (switch to app-issued JWTs with a refresh-token strategy).

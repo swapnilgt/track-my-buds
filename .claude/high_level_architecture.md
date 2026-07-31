@@ -77,16 +77,17 @@ graph TD
 
 ### API Gateway
 - Single entry point for all client traffic (REST and WebSocket)
-- Validates JWT tokens on every request before forwarding
-- Enforces account activation state — rejects requests from accounts without a username set
+- Verifies the caller's identity token on every request through an identity-provider abstraction (Firebase today), resolves the internal `userId` from the `AUTH_CREDENTIAL` mapping (cached in Redis), and forwards it downstream as a trusted `X-User-Id` header
+- Enforces account activation state — rejects requests from accounts that have not yet created a profile (no username)
 - Applies rate limiting
 
 ### Auth Service
-- Handles user registration and login via two flows:
-  - **Phone number + OTP**: delegates OTP delivery and verification to Firebase Auth
-  - **Google SSO**: delegates to Firebase Auth / Google OAuth
-- Issues JWT tokens on successful authentication
-- Handles OTP re-verification when a user updates their phone number
+- Delegates authentication to an external identity provider — Firebase Auth today, behind a swappable provider-agnostic interface:
+  - **Phone number + OTP**: Firebase handles OTP delivery and verification
+  - **Google SSO**: Firebase / Google OAuth
+- On first login (`POST /auth/session`), verifies the identity token, mints the internal `userId`, and creates the `AUTH_CREDENTIAL` mapping (`providerUid → userId`). Does **not** issue app tokens — the app consumes the provider's identity tokens directly (see Authentication & Authorization below)
+- Supports server-initiated session revocation (force logout) through the provider (Firebase Admin SDK today)
+- Handles OTP re-verification when a user updates their phone number (delegated to the provider)
 
 ### User Service
 - Manages user profile fields: name, email, avatar, phone number, locationSharingEnabled
@@ -128,6 +129,29 @@ graph TD
   - **FCM** (Firebase Cloud Messaging) — in-app push notification to the target user's device
   - **Email** — via email provider (TBD) for invite and ownership change events
   - **SMS** — via SMS provider (TBD) for invite and ownership change events
+
+---
+
+## Authentication & Authorization
+
+The system delegates authentication to an external identity provider and enforces authorization from its own data (**Model B** — see caveat). The provider is Firebase Auth today, but is accessed behind provider-agnostic interfaces (see "Provider-agnostic by design").
+
+**Authentication (who you are):**
+1. The client authenticates with the provider on-device (phone OTP or Google SSO) and receives an identity token. The provider SDK auto-refreshes it on the client.
+2. After sign-in the client calls `POST /auth/session`; on first login Auth Service mints the internal `userId` and creates the `AUTH_CREDENTIAL` mapping (`providerUid → userId`).
+3. On every subsequent request the client sends the identity token as a Bearer token. The API Gateway verifies it, resolves `userId` from the cached `AUTH_CREDENTIAL` mapping, and forwards `X-User-Id` downstream. Services trust `X-User-Id` because they are reachable only via the Gateway.
+
+**Authorization (what you can do)** is decided by our services from our own data, never from provider token claims:
+- **Activation gate** — enforced by the Gateway from a cached activation flag; blocks all but the onboarding endpoints until a profile exists.
+- **Group ownership** — Group Service enforces `OWNER`-only actions (invite, promote, demote, remove, update group) by loading the caller's membership and checking `role = OWNER`. This is never delegated to the Gateway, which has no membership knowledge.
+
+**Session revocation (logout):**
+- *Ordinary logout* is client-side — the provider SDK clears the token on the device.
+- *Server-initiated logout* — Auth Service revokes all of a user's sessions through the provider (`DELETE /auth/sessions`; Firebase Admin SDK `revokeRefreshTokens` today). The Gateway enforces revocation by checking the token against the provider's revocation time during verification.
+
+**Provider-agnostic by design:** Although Firebase is the current identity provider, all APIs and internal interfaces are provider-agnostic. The Gateway and Auth Service depend on interfaces — token verification, first-login provisioning, session revocation — with Firebase as the current adapter. Downstream services only ever see the generic `X-User-Id` principal, never provider tokens or types. `AUTH_CREDENTIAL` stores a generic `provider` + `providerUid` rather than a Firebase-specific field. Swapping providers is isolated to the adapter (and the client SDK).
+
+> **Caveat — revisit at scale.** We consume the provider's identity tokens directly: no app-issued JWT and no refresh-token strategy on our side. This keeps Auth simple but couples request-time auth to the provider. If the product scales or we need custom token semantics, revisit and consider issuing our own app JWT (Model A) with a refresh-token strategy.
 
 ---
 

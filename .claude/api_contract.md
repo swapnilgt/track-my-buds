@@ -14,12 +14,17 @@ Client-facing REST contract for all backend services, exposed through the API Ga
 - Real-time location uses a WebSocket endpoint (see §7), not REST.
 
 ### Authentication
-- Every request except the token-exchange endpoints carries `Authorization: Bearer <accessToken>`.
-- The **API Gateway** validates the JWT, enforces the activation gate, then forwards the authenticated user id to downstream services in a trusted `X-User-Id` header. Downstream services never parse the JWT themselves and never trust a client-supplied `X-User-Id`.
+- Every request carries `Authorization: Bearer <identity token>` — a bearer credential proving the caller is authenticated. **The API treats this token as opaque and provider-agnostic:** the identity provider is an implementation detail behind the Gateway's verifier. It is a Firebase ID token today (auto-refreshed by the Firebase SDK on the client, so there is no app-issued token and no refresh-token endpoint), but no API consumer or downstream service should assume Firebase specifically.
+- The **API Gateway** verifies the identity token through an identity-provider abstraction (Firebase implementation today), resolves the caller's internal `userId` from the `AUTH_CREDENTIAL` mapping (cached in Redis), enforces the activation gate, and forwards the `userId` to downstream services in a trusted `X-User-Id` header. Downstream services never see or verify the identity token — they consume only the generic `X-User-Id` principal, staying fully provider-agnostic.
 - `me` in a path always resolves to the caller's `X-User-Id`.
+- The one exception is `POST /auth/session` (§2): on first login no mapping exists yet, so the Gateway verifies the identity token and forwards without resolving a `userId`.
+
+> **Provider-agnostic by design.** Firebase Auth is the current identity provider, but all APIs and internal interfaces are Firebase-agnostic. Provider access sits behind interfaces (token verification, first-login provisioning, session revocation), with Firebase as the current adapter, so the provider can be swapped with change isolated to that adapter (and the client SDK).
+
+> **Caveat — revisit at scale.** We currently consume the provider's identity tokens directly (Model B): no app-issued JWT, and no refresh-token strategy on our side. This keeps Auth simple but couples request-time auth to the provider. If the product scales or we need custom token semantics, revisit and consider having Auth Service issue our own app JWT (Model A) with a refresh-token strategy.
 
 ### Activation gate
-- Until a user has created their profile, the Gateway allows only: the token-exchange endpoints (§2), `POST /users/me` (create profile), and `GET /users/me`.
+- Until a user has created their profile, the Gateway allows only: `POST /auth/session` (§2), `POST /users/me` (create profile), and `GET /users/me`.
 - Any other endpoint returns `403` with `type: "https://trackmybuds/errors/account-not-activated"` while the account is inactive.
 
 ### Content types
@@ -77,29 +82,29 @@ Client-facing REST contract for all backend services, exposed through the API Ga
 
 ## 2. Auth Service — `/api/v1/auth`
 
-Handles authentication and token issuance only — it does **not** own the user profile. The client authenticates with Firebase (phone OTP or Google SSO) on-device, obtains a Firebase ID token, and exchanges it here for the app's own JWT. On first exchange for a new identity, Auth Service mints the app `userId` and creates the `AUTH_CREDENTIAL` mapping (`firebaseUid → userId`) — nothing more. The `USER` profile is created separately by User Service during onboarding (§3).
+Handles first-login provisioning and session revocation only — it does **not** issue tokens and does **not** own the user profile. The client authenticates with the identity provider (Firebase today — phone OTP or Google SSO) on-device and obtains an identity token, which it uses directly against the API (see §1). Auth Service's job is to establish the session and, on first login, mint the app `userId` and create the `AUTH_CREDENTIAL` mapping (`providerUid → userId`). The `USER` profile is created separately by User Service during onboarding (§3).
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/auth/token` | None | Exchange a Firebase ID token for app tokens. On first login, mints `userId` and creates the credential mapping — no profile. |
-| POST | `/auth/token/refresh` | None | Exchange a refresh token for a new access token. |
-| POST | `/auth/logout` | Bearer | Revoke the caller's refresh token. |
+| POST | `/auth/session` | Identity token | Establish a session. Verifies the identity token; on first login mints `userId` and creates the `AUTH_CREDENTIAL` mapping. Idempotent. |
+| DELETE | `/auth/sessions` | Bearer | Server-initiated logout — revoke all of the caller's active sessions with the provider. |
 
-**POST `/auth/token`**
+**POST `/auth/session`**
 ```json
-// request
-{ "firebaseIdToken": "<firebase-id-token>" }
+// request: Authorization: Bearer <identity token>, no body
 
 // 200 OK
 {
-  "accessToken": "<jwt>",
-  "refreshToken": "<opaque>",
-  "tokenType": "Bearer",
-  "expiresIn": 3600,
+  "userId": "...",
   "activated": false
 }
 ```
+- Called by the client after each sign-in. Idempotent — returns the existing mapping on subsequent calls.
 - `activated` is `false` until the user has created their profile (§3), signalling the client to route to onboarding.
+
+**Logout**
+- *Client-side (ordinary):* the client clears the token on the device via the provider SDK sign-out — no server call needed.
+- *Server-initiated:* `DELETE /auth/sessions` → `204`. Revokes all of the caller's sessions at the provider (e.g. "log out of all devices", or on compromise). Implemented today via the Firebase Admin SDK (`revokeRefreshTokens`); the Gateway then rejects already-issued tokens by verifying them against the provider's revocation time. Exposed through a provider-agnostic interface so the mechanism can change with the provider.
 
 ---
 
@@ -231,7 +236,7 @@ No client-facing REST API. Consumes `group.events` from Kafka and dispatches FCM
 
 Live location is delivered over a WebSocket, not REST.
 
-- **Connect:** `wss://{host}/ws/locations` with the access token supplied during the handshake (`Authorization: Bearer <jwt>` header, or `?token=` where headers aren't available to the client).
+- **Connect:** `wss://{host}/ws/locations` with the identity token supplied during the handshake (`Authorization: Bearer <identity token>` header, or `?token=` where headers aren't available to the client).
 - **Subscribe / unsubscribe** to a group's live feed (membership is verified once on subscribe):
 ```json
 // client → server

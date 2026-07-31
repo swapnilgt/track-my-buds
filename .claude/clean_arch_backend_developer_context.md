@@ -13,7 +13,8 @@ Whenever generating code, use the structure described in this document.
 - Package: `domain`
 - Sub-packages:
     - `entity` — Domain entities as plain Java classes (no JPA or framework annotations).
-    - `repository` — Repository interfaces (outbound ports) defining data access contracts. Implemented by outbound adapters.
+    - `repository` — Repository interfaces (outbound ports) for **persistence** — database and cache. Implemented by outbound adapters.
+    - `gateway` — Outbound port interfaces for **external third-party services** (identity provider, push, email, SMS, object storage). Provider-agnostic: they accept and return only our own types — no vendor SDK types leak through. Implemented by outbound adapters.
     - `usecase` — Use case interfaces (inbound ports) and their implementations. Each use case class handles a single operation.
 
 ### Inbound Adapters (`adapter/in`)
@@ -24,18 +25,34 @@ Whenever generating code, use the structure described in this document.
     - `messaging` — Kafka consumers annotated with `@KafkaListener`. One consumer class per Kafka topic. Present only in services that consume Kafka events (e.g. Notification Service).
 
 ### Outbound Adapters (`adapter/out`)
-- Classes that the application calls to reach external systems. Each adapter implements a `domain/repository` interface.
+- Classes that the application calls to reach external systems. Each adapter implements a `domain/repository` (persistence) or `domain/gateway` (external service) port — the domain depends only on the interface, never on the adapter.
 - Package: `adapter/out`
 - Sub-packages:
     - `persistence` — Spring Data JPA implementations for PostgreSQL. Contains JPA entity models (annotated with `@Entity`), Spring Data JPA repository interfaces, the repository implementation class that implements the domain repository interface, and MapStruct mappers (JPA entity ↔ domain entity). All co-located per domain resource.
     - `cache` — Redis implementations for location cache and Pub/Sub. Contains the implementation class and its MapStruct mapper.
-    - `web` — HTTP client implementations for external APIs (e.g. Firebase Auth). Contains the client class and its mapper.
+    - `identity` — Identity-provider gateway implementation (Firebase today). Implements the `domain/gateway` identity ports; the **only** place identity-provider SDK types may appear. See "Identity Provider" below.
+    - `web` — HTTP client implementations for other external REST APIs. Contains the client class and its mapper.
     - `messaging` — Kafka producers. Called directly by controllers after a successful use case execution. Present only in services that publish Kafka events (e.g. Group Service).
-    - `mock` — Mock implementations of domain repository interfaces. Used in unit tests instead of real infrastructure.
+    - `mock` — Mock implementations of domain `repository` / `gateway` ports. Used in unit tests instead of real infrastructure.
+- Each additional external provider (push, email, SMS, object storage) gets its own `adapter/out/<capability>` sub-package implementing the corresponding `domain/gateway` port, following the identity-provider pattern below.
 
 ### Config
 - Package: `config`
 - Contains Spring `@Configuration` classes for explicit bean definitions (e.g. Redis client config, Kafka producer/consumer config, WebSocket config).
+
+### Identity Provider — worked example of the gateway pattern
+Authentication is delegated to an external identity provider (Firebase today) but kept provider-agnostic. The capability is expressed as small, focused ports in `domain/gateway`, each backed by a single provider adapter in `adapter/out/identity`:
+
+| Port (`domain/gateway`) | Responsibility | Adapter (`adapter/out/identity`, Firebase today) |
+|-------------------------|----------------|--------------------------------------------------|
+| `IdentityTokenVerifier` | Verify an identity token; return a generic principal (`providerUid` + provider) | Verifies the Firebase ID token via the Firebase Admin SDK |
+| `IdentityProvisioner` | Resolve a verified identity to the data needed for first-login provisioning | Reads the verified Firebase identity |
+| `SessionRevoker` | Revoke all of a user's sessions (server-initiated logout) | Calls Firebase Admin SDK `revokeRefreshTokens` |
+
+Rules:
+- Ports accept and return only our own types (`providerUid`, principal, `userId`) — never identity-provider SDK types.
+- Identity-provider SDK imports appear **only** inside `adapter/out/identity`. If they leak into `domain`, `usecase`, `adapter/in`, or any DTO, the abstraction is broken.
+- A service declares only the ports it needs: the **API Gateway** uses `IdentityTokenVerifier`; **Auth Service** uses `IdentityProvisioner` and `SessionRevoker`. Ports are not shared across services (no shared kernel — each service owns its own copy so it can be extracted independently).
 
 ---
 
@@ -112,7 +129,8 @@ backend/<service-name>/
 │   │   ├── java/com/trackmybuds/<service-name>/
 │   │   │   ├── domain/
 │   │   │   │   ├── entity/
-│   │   │   │   ├── repository/
+│   │   │   │   ├── repository/         (persistence ports)
+│   │   │   │   ├── gateway/            (external-service ports: identity, push, email, sms, object store)
 │   │   │   │   └── usecase/
 │   │   │   ├── adapter/
 │   │   │   │   ├── in/
@@ -121,7 +139,8 @@ backend/<service-name>/
 │   │   │   │   └── out/
 │   │   │   │       ├── persistence/    (JPA entity models, Spring Data repos, impls, mappers)
 │   │   │   │       ├── cache/          (Redis impls, mappers)
-│   │   │   │       ├── web/            (HTTP clients, mappers)
+│   │   │   │       ├── identity/       (identity-provider adapter — Firebase today)
+│   │   │   │       ├── web/            (HTTP clients for other external REST APIs)
 │   │   │   │       ├── messaging/      (only if service publishes Kafka events)
 │   │   │   │       └── mock/           (mock impls for unit tests)
 │   │   │   └── config/

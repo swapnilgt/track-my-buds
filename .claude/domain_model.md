@@ -22,9 +22,8 @@ erDiagram
 
     AUTH_CREDENTIAL {
         uuid userId PK "matches User.id"
-        varchar firebaseUid "unique"
-        varchar phoneNumber "nullable"
-        varchar googleEmail "nullable"
+        enum provider "identity provider, e.g. FIREBASE"
+        varchar providerUid "the provider's user id; unique per provider"
         timestamp createdAt
     }
 
@@ -98,15 +97,17 @@ Owned by **User Service**.
 ---
 
 ### Auth Credential
-Owned by **Auth Service**. Stores the mapping between the app's `userId` and Firebase's identity.
+Owned by **Auth Service**. Maps the app's `userId` to the external identity provider's user id. Kept provider-agnostic — the provider is a field, not baked into the schema — so the identity provider can be swapped without a data-model change.
 
 | Field | Type | Constraints | Notes |
 |-------|------|-------------|-------|
 | userId | UUID | PK | Matches `User.id`. Auth Service mints this id when creating the credential on first login; User Service later creates the `USER` row with the same id during onboarding |
-| firebaseUid | VARCHAR | Unique, not null | Firebase user identifier used to validate tokens |
-| phoneNumber | VARCHAR | Nullable | Used to look up a credential during the OTP flow |
-| googleEmail | VARCHAR | Nullable | Used to look up a credential during the Google SSO flow |
+| provider | ENUM | Not null | Identity provider — `FIREBASE` today. Reserved so additional/replacement providers can be added later |
+| providerUid | VARCHAR | Not null | The provider's user identifier (e.g. Firebase UID), used to resolve `userId` from a verified identity token |
 | createdAt | TIMESTAMP | Not null | |
+
+**Constraints:**
+- Unique on `(provider, providerUid)`.
 
 ---
 
