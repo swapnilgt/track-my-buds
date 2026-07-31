@@ -2,5 +2,6 @@
 - Always use an interface definition between any two layers in the low-level design.
 - For all the operational tools like analytics, logging as well, expose the functionality though an interface so that the underlying solution provider can be updated at will.
 - All external third-party providers (identity / auth, push notifications, email, SMS, object storage) must be accessed through an interface — a domain port with a provider-specific adapter — so the provider can be swapped without touching business logic or public APIs. For example, Firebase Auth is used only behind an identity-provider interface; no API, service, interface, or data model exposes Firebase-specific types.
+- This provider-behind-an-interface rule applies to the client app as well, not just the backend. The Flutter app must access Firebase Auth (phone OTP, Google SSO, token retrieval / refresh) only through its own auth-provider interface, with the Firebase SDK confined to a single adapter. No BLoC, use case, repository, or widget may reference Firebase types directly. This keeps the client — the part a backend port cannot shield — from becoming the hard-to-migrate seam if the identity provider is ever changed.
 - Always include test cases with the new code written.
 - When creating the implementation plan, create the implementation plan in a way that the code generated is reviewable.

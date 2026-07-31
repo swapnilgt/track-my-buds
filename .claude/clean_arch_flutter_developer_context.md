@@ -10,6 +10,7 @@ Whenever generating the code, we will be using the code structure as mentioned b
     - `entities` folder listing the core entities.
     - `repositories` folder listing the repository interfaces.
     - `usecase` folder listing the usecases for the business logic.
+- External third-party providers are represented here as interfaces too, following the same rule as the backend. In particular, the identity/auth provider (Firebase Auth — phone OTP, Google SSO, token retrieval / refresh) is exposed only through an `AuthProvider` interface defined in this layer. No use case, repository, BLoC, or widget references Firebase types directly; the app depends on the interface, never the SDK. This keeps the client from becoming the hard-to-migrate seam if the identity provider is ever changed. The Firebase implementation lives in the implementation layer (see below).
 
 #### Data Layer
 - `lib/data` folder
@@ -29,6 +30,7 @@ Whenever generating the code, we will be using the code structure as mentioned b
         - `remote` folder listing the remote data sources implementations.
         - `mock` folder listing the mock data sources implementations.
     - `domain` folder listing the domain layer implementations.
+- Provider adapters (e.g. the Firebase implementation of the `AuthProvider` interface) live under the `remote` datasource folder and are the **only** place the Firebase SDK may be imported. Swapping the identity provider later means replacing this one adapter and its DI binding — nothing in `domain`, `presentation`, or the rest of `data` changes.
 
 #### Presentation Layer
 - This folder contains the code and interfaces related to the UI.
