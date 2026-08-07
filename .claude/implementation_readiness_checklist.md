@@ -45,27 +45,21 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` closed
 
 ## Medium — resolve during early implementation
 
-### [~] 7. Inter-service communication & service-to-service auth
-- **Transport decided:** synchronous REST over the internal network via dedicated `/internal/...` endpoints. Known internal calls: WebSocket → Group (membership verify), Location → Group (`GET /internal/users/{userId}/groups`, membership read-through), Notification → User (contact lookup). These endpoints are not exposed through the Gateway.
-- **Still open — service-to-service auth:** how internal calls are authenticated/authorized (internal network trust only, mTLS, or shared service tokens), and how `/internal/...` routes are kept off the public Gateway.
-- **Target document:** `high_level_architecture.md`.
+### [x] 7. Inter-service communication & service-to-service auth
+- **Decided:** synchronous REST over the internal network via dedicated `/internal/...` endpoints (WebSocket → Group membership verify, Location → Group membership read-through, Notification → User contact lookup). `/internal/...` routes are **never mapped in the Gateway**, so they are unreachable from outside. **Auth = network trust for now** — callers pass `userId` explicitly rather than a trusted principal; no per-call service credential yet. Documented in `high_level_architecture.md` → Authentication & Authorization → "Internal (service-to-service) calls", with a caveat to harden with mTLS / signed service tokens before production.
 
 ### [x] 8. Database migration tool
 - **Decided:** **Flyway** (signed off). Versioned plain-SQL migrations per service — a natural fit for Postgres + PostGIS DDL (extensions, geometry columns, spatial indexes) with first-class Spring Boot auto-integration. Recorded in `tech_stack.md`.
 
-### [ ] 9. Object storage bucket / key layout
-- **Gap:** MinIO is chosen but the bucket structure and object-key naming for avatars are undefined.
-- **Target document:** `high_level_architecture.md` (Object Store section).
-- **To decide:** Bucket-per-type vs shared bucket, key naming (e.g. `avatars/user/{userId}`), public vs pre-signed access.
+### [x] 9. Object storage bucket / key layout
+- **Decided:** **bucket-per-type** — `user-avatars` (key `{userId}`) and `group-avatars` (key `{groupId}`). **Stable key, overwrite-in-place** (one object per owner, no orphan cleanup). Buckets are **private**; upload via pre-signed PUT, read via short-lived pre-signed GET. `avatarUrl` stores the **object key only**, never a pre-signed URL; no file extension (content type in object metadata). Documented in `high_level_architecture.md` → MinIO Object Store ("Bucket & key layout").
 
 ---
 
 ## Minor — nice to close before coding the relevant part
 
-### [ ] 10. Testcontainers for integration tests
-- **Gap:** Integration testing uses `@SpringBootTest` / `@DataJpaTest` but Testcontainers (real PostgreSQL/Redis in Docker for tests) is not mentioned.
-- **Target document:** `clean_arch_backend_developer_context.md` + `tech_stack.md`.
+### [x] 10. Testcontainers for integration tests
+- **Decided:** **Testcontainers** (signed off) for integration tests — real PostgreSQL+PostGIS, Redis, Kafka, and MinIO in Docker; no in-memory substitutes for PostGIS/Redis/Kafka behavior. Docker is a test-time dependency. Recorded in `tech_stack.md` and `clean_arch_backend_developer_context.md` (§4 Testing).
 
-### [ ] 11. Expand `generic_coding_guidelines.md`
-- **Gap:** Currently two lines. Missing naming conventions, error-handling rules, and what is unit- vs integration-tested.
-- **Target document:** `generic_coding_guidelines.md`.
+### [x] 11. Expand `generic_coding_guidelines.md`
+- **Decided:** expanded into sections — Architecture & abstractions, Naming conventions (backend + client, ports vs adapters), Error handling (domain exceptions, boundary translation, RFC 7807 mapping), Testing (unit vs integration placement rules), and Reviewability. In `generic_coding_guidelines.md`.

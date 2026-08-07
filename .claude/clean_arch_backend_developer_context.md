@@ -172,7 +172,8 @@ backend/<service-name>/
 - Use Mockito for mocking dependencies in unit tests.
 - Unit tests go in `src/test/java/.../unit/` and test individual classes in isolation.
 - Integration tests go in `src/test/java/.../integration/` and use `@SpringBootTest` or `@DataJpaTest` to test with real Spring context or real DB layer.
-- Mock implementations in `adapter/out/mock/` implement `domain/repository` interfaces and are used in unit tests to replace real infrastructure without starting a Spring context.
+- Integration tests run their backing infrastructure with **Testcontainers** — a real PostgreSQL+PostGIS container for persistence/spatial tests, and real Redis / Kafka / MinIO containers where the code under test uses them. Do not substitute in-memory fakes (e.g. H2) for these: PostGIS spatial SQL, Redis Pub/Sub, and Kafka semantics must be exercised against the real engines. Docker is therefore a test-time dependency.
+- Mock implementations in `adapter/out/mock/` implement `domain/repository` or `domain/gateway` interfaces and are used in unit tests to replace real infrastructure without starting a Spring context.
 
 ---
 

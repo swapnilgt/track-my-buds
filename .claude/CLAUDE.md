@@ -7,6 +7,7 @@
 - Client-facing REST/WebSocket API contract is available in `api_contract.md`.
 - Environment setup details (local, pre-production, production) are available in `environments.md`.
 - Open gaps and decisions to close before/during implementation are tracked in `implementation_readiness_checklist.md`.
+- The phased, milestone-based build plan (vertical slices, backend + client) is in `implementation_plan.md`.
 - When structuring code and config files in the repo, do it in a way so that I can easily move the code for different services and frontend application in different repositories if needed.
 - All the code related to user facing app should be inside `../client-app` folder.
 - All the code related to backend services should be inside `../backend` folder.

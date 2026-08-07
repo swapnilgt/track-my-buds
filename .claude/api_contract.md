@@ -2,7 +2,7 @@
 
 Client-facing REST contract for all backend services, exposed through the API Gateway. This is the agreed interface between the Flutter app and the backend, and between the Gateway and downstream services.
 
-> **Depends on auth flow (#2, `implementation_readiness_checklist.md`).** The token-exchange details, JWT claims, and the `X-User-Id` propagation described here are provisional until the auth flow is finalised. Endpoint shapes are stable regardless.
+> **Scope.** This document specifies the **client-facing** API exposed through the Gateway. Internal service-to-service endpoints — never routed through the Gateway — are specified separately in §9. The auth model is finalised (Model B — verify the provider's identity token at the Gateway, forward a trusted `X-User-Id`; see §1 and `high_level_architecture.md`).
 
 ---
 
@@ -130,7 +130,7 @@ Owns the user profile for its entire lifecycle, including **first-time creation*
   "username": "asha_k",
   "phoneNumber": "+919812345678",
   "email": "asha@example.com",
-  "avatarUrl": "avatars/user/{id}",
+  "avatarUrl": "{userId}",
   "locationSharingEnabled": true
 }
 ```
@@ -151,9 +151,10 @@ Owns the user profile for its entire lifecycle, including **first-time creation*
 
 **POST `/users/me/avatar/upload-url`** → `200`
 ```json
-{ "uploadUrl": "https://minio/...signed...", "avatarUrl": "avatars/user/{id}" }
+{ "uploadUrl": "https://minio/...signed...", "avatarUrl": "{userId}" }
 ```
-Client `PUT`s the image bytes to `uploadUrl`, then `PATCH /users/me` with `{ "avatarUrl": "avatars/user/{id}" }`.
+Client `PUT`s the image bytes to `uploadUrl`, then `PATCH /users/me` with `{ "avatarUrl": "{userId}" }`.
+- `avatarUrl` holds the **MinIO object key only** — the user's id in the private `user-avatars` bucket (bucket-per-type, stable key, per `high_level_architecture.md` object-store layout). It is never a full or pre-signed URL; the service mints a short-lived pre-signed GET URL on read.
 
 **GET `/users?ids=a,b,c` → 200** — `items` of public profiles (`id`, `name`, `username`, `avatarUrl` only).
 
@@ -228,7 +229,7 @@ Serves the "you've been invited" view without the client knowing group ids up fr
 
 ## 6. Notification Service
 
-No client-facing REST API. Consumes `group.events` from Kafka and dispatches FCM / email / SMS. Event schema is tracked as checklist item #4.
+No client-facing REST API. Consumes `group.events` from Kafka and dispatches FCM / email / SMS. Event schema and per-consumer behaviour are specified in `high_level_architecture.md` ("Group Event Propagation"). It fetches the target user's contact details via an internal endpoint (§9), since events carry ids only.
 
 ---
 
@@ -262,3 +263,34 @@ Live location is delivered over a WebSocket, not REST.
 | `/api/v1/invites/**` | Group Service |
 | `/api/v1/locations/**` | Location Service |
 | `/ws/locations` | WebSocket Service |
+
+- `/internal/**` (§9) is **deliberately absent** from this table — those routes are never mapped in the Gateway and are unreachable from clients.
+
+---
+
+## 9. Internal endpoints (service-to-service)
+
+These endpoints are **not** part of the client-facing API. They are called service-to-service over the internal network and are **never routed through the Gateway**, so no external client can reach them.
+
+**Conventions (differ from the public API):**
+- **No `X-User-Id` principal and no identity token.** Internal calls are service-scoped; the subject `userId` (or `groupId`) is passed **explicitly in the path**, not derived from a caller principal.
+- **Auth = network trust today.** Callers are trusted because the calls originate on the private network. To be hardened before production with mTLS or signed service tokens (see `high_level_architecture.md` → "Internal (service-to-service) calls").
+- Provider-agnostic and framework-agnostic: responses use only our own types. Errors still follow RFC 7807.
+- Payloads are small and unpaginated (bounded by a single user's memberships or a single group's members).
+
+### User Service — `/internal/users`
+
+| Method | Path | Caller | Returns |
+|--------|------|--------|---------|
+| GET | `/internal/users/{userId}/location-sharing` | Location Service (M3) | `{ "enabled": true }` — the user's `locationSharingEnabled`. Location Service caches this in Redis and enforces it on updates. |
+| GET | `/internal/users/{userId}/contact` | Notification Service (M5) | `{ "email": "...", "phoneNumber": "..." }` — for email/SMS dispatch. Either field may be null. |
+
+### Group Service — `/internal`
+
+| Method | Path | Caller | Returns |
+|--------|------|--------|---------|
+| GET | `/internal/users/{userId}/groups` | Location Service (M4) | `{ "items": ["<groupId>", ...] }` — the user's **ACTIVE** group ids; rebuilds the `user:{userId}:groups` membership cache on a miss. |
+| GET | `/internal/groups/{groupId}/members` | Location Service (M3) | `{ "items": [ { "userId": "...", "role": "OWNER|MEMBER" } ] }` — **ACTIVE** members; used to resolve whose last-known location to return. |
+| GET | `/internal/groups/{groupId}/members/{userId}` | WebSocket Service (M4) | `{ "active": true, "role": "MEMBER" }` — single-membership check on WebSocket subscribe. `404` if not a member. |
+
+> These map directly to the internal calls documented in `high_level_architecture.md` and drive the membership-cache propagation (checklist #3) and the fanout/notification flows (#4). Add new `/internal/**` endpoints here as later milestones introduce them.

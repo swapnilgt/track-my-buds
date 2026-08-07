@@ -159,6 +159,16 @@ The system delegates authentication to an external identity provider and enforce
 
 > **Caveat — revisit at scale.** We consume the provider's identity tokens directly: no app-issued JWT and no refresh-token strategy on our side. This keeps Auth simple but couples request-time auth to the provider. If the product scales or we need custom token semantics, revisit and consider issuing our own app JWT (Model A) with a refresh-token strategy.
 
+### Internal (service-to-service) calls
+
+Some flows require one service to call another directly, not via the Gateway: WebSocket → Group (membership verify), Location → Group (`GET /internal/users/{userId}/groups` membership read-through), Notification → User (contact lookup). These use synchronous REST over the internal network on dedicated `/internal/...` paths.
+
+- **Not publicly reachable.** `/internal/...` routes are **never mapped in the API Gateway**, so no client can reach them from outside. They are exposed only on the services' internal network (e.g. cluster-private addresses / a dedicated port), never on the public ingress.
+- **Auth today — network trust.** Internal calls are trusted because they originate on the private network; there is no per-call service credential yet. The caller passes the relevant `userId` as an explicit argument (path/query), not as a trusted `X-User-Id` principal — internal endpoints do their own authorization from our data where needed.
+- **No user-token forwarding.** Internal calls do not carry or re-verify the caller's identity token; they are service-scoped operations, distinct from user-authenticated Gateway traffic.
+
+> **Caveat — harden before production.** Network trust assumes the internal network is not hostile. Before production, add a stronger service-to-service auth mechanism (mutual TLS or signed service tokens) and enforce that `/internal/...` is unreachable from the public ingress. Tracked as a production-hardening item.
+
 ---
 
 ## Data Stores
@@ -206,9 +216,21 @@ Notes:
 ### MinIO — Object Store
 - S3-compatible object store for binary assets — currently user and group avatar images.
 - **Upload:** the client requests a pre-signed upload URL from the owning service (User Service for user avatars, Group Service for group avatars), then uploads the image directly to MinIO. Large binaries never pass through the services.
-- **Persistence:** the service stores only the resulting object key / URL on the entity (`User.avatarUrl`, `Group.avatarUrl`) in PostgreSQL — the image bytes live only in the object store.
-- **Serve:** avatars are served to clients via the object store URL (pre-signed for private buckets, or direct for public read) — not proxied through the services.
+- **Persistence:** the service stores only the resulting **object key** on the entity (`User.avatarUrl`, `Group.avatarUrl`) in PostgreSQL — the image bytes live only in the object store.
+- **Serve:** buckets are **private**; the owning service mints a short-lived pre-signed GET URL on read. Avatars are never proxied through the services.
 - S3 API compatibility means the same client code targets MinIO locally and any managed S3-compatible store in the cloud with only an endpoint change.
+
+**Bucket & key layout:**
+
+| Bucket | Owning service | Object key | Access |
+|--------|----------------|-----------|--------|
+| `user-avatars` | User Service | `{userId}` | Private — pre-signed PUT (upload) and pre-signed GET (read) |
+| `group-avatars` | Group Service | `{groupId}` | Private — pre-signed PUT (upload) and pre-signed GET (read) |
+
+- **Bucket-per-type** (not one shared bucket) so access policy, lifecycle, and quotas can differ per asset class, and each owning service is scoped to its own bucket.
+- **Stable key, overwrite-in-place** — one object per user/group, keyed by the owner's id. A new upload overwrites the same key, so there is no orphaned-object cleanup and `avatarUrl` never has to change. Because reads go through short-lived pre-signed GET URLs (not long-lived CDN links), staleness is bounded by the URL TTL; clients may also cache-bust with the entity's `updatedAt`.
+- `avatarUrl` stores the **object key only** (e.g. the `userId`), not a full or pre-signed URL — pre-signed URLs are generated on demand and must never be persisted.
+- The key carries no file extension; content type is stored as S3 object metadata at upload time.
 
 ---
 

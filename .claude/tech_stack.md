@@ -10,12 +10,16 @@
 ## Backend Services
 | Concern | Choice | Notes |
 |---------|--------|-------|
-| Language / Framework | Java / Spring Boot | |
+| Language / Framework | Java 21 (LTS) / Spring Boot 3.x | Virtual threads available for the WebSocket + I/O-heavy services |
+| Build tool | Gradle (Kotlin DSL) | Faster incremental builds and cleaner multi-module ergonomics for the monorepo of self-contained services |
 | Architecture style | Microservices | |
+| Service data isolation | Database-per-service (PostgreSQL) | Each service owns a separate logical database — own connection, credentials, and Flyway history. Most faithful to the "extract to its own repo/infra later" constraint. Locally, multiple databases in one Postgres container |
+| Local orchestration | Docker Compose | One compose stack brings up Postgres+PostGIS, Redis, Kafka, MinIO, and observability (Prometheus/Grafana/Zipkin) for local dev |
 | API Gateway | Spring Cloud Gateway | Single entry point — routing, rate limiting, and per-request identity-token verification (Model B). Stays in the Java/Spring ecosystem so token verification sits alongside the Firebase Admin SDK identity adapter; no separate runtime to operate |
 | Database migrations | Flyway | Versioned plain-SQL migrations per service. Natural fit for Postgres + PostGIS DDL (extensions, geometry columns, spatial indexes); first-class Spring Boot auto-integration |
 | Mapping library | MapStruct | Compile-time type-safe mappers |
-| Testing | JUnit 5 + Mockito | |
+| Unit testing | JUnit 5 + Mockito | |
+| Integration testing | Testcontainers | Spins up real PostgreSQL+PostGIS, Redis, Kafka, and MinIO in Docker for integration tests. Required because PostGIS spatial SQL, Redis Pub/Sub, and Kafka semantics cannot be faithfully reproduced by in-memory fakes (e.g. H2 has no PostGIS). Adds Docker as a test-time dependency |
 | Logging | SLF4J + Logback + Logstash Logback Encoder | SLF4J is the logging API; Logback is the implementation (bundled with Spring Boot); Logstash encoder outputs structured JSON in preprod and prod |
 | Metrics collection | Spring Boot Actuator + Micrometer | Bundled with Spring Boot. Actuator exposes `/actuator/health` and `/actuator/prometheus`; Micrometer collects JVM, HTTP, DB pool, and Kafka metrics automatically |
 | Distributed tracing | Micrometer Tracing + Brave bridge | Auto-populates `traceId` / `spanId` in logs and propagates trace context across service calls via HTTP headers |
