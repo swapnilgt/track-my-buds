@@ -12,7 +12,7 @@ graph TD
     App["Flutter Client App"]
 
     subgraph Gateway Layer
-        GW["API Gateway\n(JWT validation · Rate limiting · Routing)"]
+        GW["API Gateway\n(Identity-token verification · Rate limiting · Routing)"]
     end
 
     subgraph Backend Services
@@ -62,10 +62,13 @@ graph TD
     GroupSvc -->|"group.events"| Kafka
 
     Kafka -->|"group.events"| NotifSvc
+    Kafka -->|"group.events"| LocationSvc
+    LocationSvc -.->|"membership read-through (cache miss)"| GroupSvc
     RedisPubSub -->|"targeted fanout"| WSSvc
 
     WSSvc -->|"live location push"| App
 
+    NotifSvc -.->|"contact lookup"| UserSvc
     NotifSvc --> FCM
     NotifSvc --> EmailProv
     NotifSvc --> SMSProv
@@ -98,7 +101,8 @@ graph TD
 - Manages group lifecycle: create, update name and avatar, delete
 - Manages membership: invite user, accept invite, remove member, user self-remove
 - Manages ownership: promote user to owner, demote owner
-- Publishes events to Kafka topic `group.events` for all membership and ownership changes
+- Publishes events to Kafka topic `group.events` for all membership and ownership changes (single producer). These events drive both notification delivery and the Location Service membership cache — see "Group Event Propagation"
+- Exposes an internal read-through endpoint (`GET /internal/users/{userId}/groups`) returning a user's active group ids, used by Location Service to rebuild its membership cache on a cache miss
 
 ### Location Service
 - Receives location updates pushed by client devices
@@ -106,6 +110,7 @@ graph TD
   1. Persists to PostgreSQL + PostGIS (source of truth) and updates Redis location cache
   2. Resolves the user's group memberships from Redis cache, then publishes to a Redis Pub/Sub channel per group (`location:group:{groupId}`) for real-time WebSocket fanout
   - If the Redis Pub/Sub publish fails, the location is still stored; the next device update self-corrects the missed push. This is acceptable given the 30-second consistency NFR.
+- Maintains the membership cache it reads in step 2 by consuming `group.events` from Kafka (Group Service owns the data). On a cache miss it rebuilds the set via Group Service's internal read-through endpoint. See "Group Event Propagation"
 - Exposes query endpoint for last known location of all users in a group (reads from Redis cache, falls back to PostgreSQL)
 - Supports geospatial queries via PostGIS:
   - Group centerpoint (`ST_Centroid` + `ST_Collect` over member locations)
@@ -124,7 +129,8 @@ graph TD
 - Receives only events for channels with active local subscribers — no wasted processing of irrelevant group events
 
 ### Notification Service
-- Consumes `group.events` from Kafka
+- Consumes `group.events` from Kafka (acts on `MEMBER_INVITED`, `OWNER_PROMOTED`, `OWNER_DEMOTED`)
+- Events carry only ids (no contact details); Notification Service looks up the target user's email and phone from User Service on consume — contact data is owned by User Service and must not be duplicated into events
 - Dispatches notifications via three channels for each qualifying event:
   - **FCM** (Firebase Cloud Messaging) — in-app push notification to the target user's device
   - **Email** — via email provider (TBD) for invite and ownership change events
@@ -173,8 +179,23 @@ PostGIS enables:
 ### Redis — Location Cache
 - Stores latest known location per user
 - Used by Location Service for fast reads when serving live group location view
-- Also caches each user's group membership list, used by Location Service to resolve which Pub/Sub channels to publish to on each location update
-- PostgreSQL is the source of truth; Redis is eviction-tolerant
+- Also caches each user's **active** group membership list (`user:{userId}:groups` set), used by Location Service to resolve which Pub/Sub channels to publish to on each location update
+  - Kept fresh event-driven: Location Service consumes `group.events` and applies `SADD` on `MEMBER_JOINED`, `SREM` on `MEMBER_REMOVED` / `MEMBER_LEFT` (see "Group Event Propagation"). Only `ACTIVE` memberships are cached — `PENDING` invites are not, so invitees receive no location fanout until they accept
+  - Read-through on miss: if the set is absent (cold start or eviction), Location Service rebuilds it from Group Service's internal endpoint, then caches it. Group Service's PostgreSQL is the source of truth for membership
+- PostgreSQL (location) is the source of truth for location data; Redis is eviction-tolerant
+
+**Cache key schema** (all keys owned by Location Service):
+
+| Key | Redis type | Value | Written on | Read on |
+|-----|-----------|-------|-----------|---------|
+| `user:{userId}:groups` | Set | The user's **ACTIVE** `groupId`s | `group.events` consume (`SADD`/`SREM`); rebuilt via read-through on miss | Each location update — iterated to derive the `location:group:{groupId}` channels to publish to |
+| `user:{userId}:location` | String (JSON) or Hash | Latest location — `latitude`, `longitude`, `accuracy`, `recordedAt`, `updatedAt` | Each location update (step 1) | Live group-location reads (falls back to PostgreSQL on miss) |
+
+Notes:
+- The membership Set stores **only `groupId`s** — nothing else is needed on the hot path, since each member maps directly to the channel name `location:group:{groupId}`.
+- **Set** (not List) is deliberate: `SADD`/`SREM` are idempotent under Kafka's at-least-once delivery, give O(1) add/remove, and ordering is irrelevant.
+- `PENDING` memberships are never added, so the Set reflects exactly the groups eligible for location fanout.
+- **TTL** — the location entry represents *last-known location*, so it is **not** expired on the 30s update-consistency window. Freshness comes from each device update overwriting the entry; PostgreSQL is the fallback on miss. TTL exists only as a memory-reclamation bound for long-inactive users (**~24h**), after which reads fall back to PostgreSQL's last-known value. The membership Set is likewise kept event-driven and read-through rather than short-TTL — eviction is tolerated because read-through rebuilds it.
 
 ### Redis — Pub/Sub
 - One channel per group: `location:group:{groupId}`
@@ -193,9 +214,65 @@ PostGIS enables:
 
 ## Message Queue (Kafka)
 
-| Topic | Producer | Consumer | Purpose |
-|-------|----------|----------|---------|
-| `group.events` | Group Service | Notification Service | Trigger FCM/email/SMS on invite, promote, demote events |
+| Topic | Producer | Consumers | Purpose |
+|-------|----------|-----------|---------|
+| `group.events` | Group Service | Notification Service · Location Service | Fan out group membership & ownership changes to async consumers |
+
+- **Message key:** `groupId`. All events for a group land on the same partition, preserving per-group (and therefore per-`(user, group)`) ordering — e.g. `MEMBER_JOINED` is always processed before a later `MEMBER_REMOVED` for the same member.
+- **Delivery:** at-least-once. Consumers are idempotent — Location Service's `SADD`/`SREM` are naturally idempotent; Notification Service dedupes on `eventId`.
+
+See "Group Event Propagation" below for the payload schema and per-consumer behaviour.
+
+---
+
+## Group Event Propagation
+
+`group.events` is the single stream through which Group Service publishes every membership and ownership change. It has two independent consumers, each acting on the subset of event types it cares about:
+
+- **Notification Service** — sends FCM / email / SMS.
+- **Location Service** — keeps its Redis active-membership cache in sync so location fanout targets the right groups.
+
+Making one topic serve both consumers avoids a second propagation mechanism and guarantees the two views derive from the same ordered event log.
+
+### Event envelope
+
+Every event shares a common envelope; `payload` fields vary by `type`.
+
+```json
+{
+  "eventId": "9f1c...-uuid",          // unique per event; consumer idempotency key
+  "type": "MEMBER_JOINED",            // see event types below
+  "occurredAt": "2026-07-31T10:15:30Z",
+  "groupId": "...-uuid",
+  "groupName": "Weekend Trip",        // denormalized; owned by Group Service, so no cross-service fetch
+  "actorUserId": "...-uuid",          // user who performed the action; null for system-driven
+  "payload": {
+    "memberType": "USER",             // USER today; BOT reserved (see domain model)
+    "memberId": "...-uuid",           // the affected member (User.id today)
+    "invitedByUserId": "...-uuid"     // event-specific; present on MEMBER_INVITED
+  }
+}
+```
+
+Design rule: **events carry ids only, never contact details** (email/phone). Those are owned by User Service; Notification Service fetches them on consume. This keeps Group Service from reaching into User Service at publish time and prevents stale contact data in the log.
+
+### Event types and consumer behaviour
+
+| `type` | Emitted when | Notification Service | Location Service (membership cache) |
+|--------|--------------|----------------------|-------------------------------------|
+| `MEMBER_INVITED` | Owner invites a user (creates a `PENDING` membership) | Notify invitee (invite) | Ignored — `PENDING` is not cached |
+| `MEMBER_JOINED` | Invitee accepts (`PENDING` → `ACTIVE`) | — | `SADD user:{memberId}:groups {groupId}` |
+| `MEMBER_REMOVED` | Owner removes a member | — | `SREM user:{memberId}:groups {groupId}` |
+| `MEMBER_LEFT` | Member self-removes | — | `SREM user:{memberId}:groups {groupId}` |
+| `OWNER_PROMOTED` | Member promoted to owner | Notify promoted user | Ignored — role change, membership set unchanged |
+| `OWNER_DEMOTED` | Owner demoted to member | Notify demoted user | Ignored — role change, membership set unchanged |
+| `GROUP_DELETED` | Group is deleted | — | Removal handled per member (see note) |
+
+> **Group deletion:** deleting a group emits a `MEMBER_REMOVED` for each active member (rather than a single `GROUP_DELETED` the Location Service would have to expand), so the cache-maintenance logic stays uniform — every membership removal is one `SREM`. `GROUP_DELETED` is reserved for future consumers that need the group-level signal.
+
+### Read-through fallback (cache miss)
+
+The event stream keeps the cache fresh incrementally but does not repopulate a cold or evicted cache. On a miss for `user:{userId}:groups`, Location Service calls Group Service's internal endpoint `GET /internal/users/{userId}/groups` (active memberships only), caches the result, and proceeds. Group Service's PostgreSQL remains the source of truth for membership; Kafka handles the deltas, read-through handles the baseline.
 
 ---
 
@@ -220,7 +297,7 @@ PostGIS enables:
 | Remove user from group highly available and consistent | Synchronous write to PostgreSQL in Group Service |
 | Demote owner highly available and consistent | Synchronous write to PostgreSQL in Group Service |
 | Location updates highly available, consistent within 30s | Write to PostgreSQL + Redis cache; publish to Redis Pub/Sub per group for real-time WebSocket push |
-| Live location reads, max 5 min delay | Served from Redis location cache; cache TTL aligned to 30s location update consistency window |
+| Live location reads, max 5 min delay | Served from Redis location cache (last-known location); each device update overwrites the entry, so freshness is driven by write frequency, not TTL. The cache falls back to PostgreSQL on miss |
 | Notifications max 5 min delay | Async via Kafka `group.events` → Notification Service → FCM / Email / SMS |
 | Group metadata eventually consistent (5 min) | Written to PostgreSQL; no strict cache invalidation required within tolerance |
 | User self-remove eventually consistent (5 min) | Written to PostgreSQL; propagated asynchronously |

@@ -12,6 +12,8 @@
 |---------|--------|-------|
 | Language / Framework | Java / Spring Boot | |
 | Architecture style | Microservices | |
+| API Gateway | Spring Cloud Gateway | Single entry point — routing, rate limiting, and per-request identity-token verification (Model B). Stays in the Java/Spring ecosystem so token verification sits alongside the Firebase Admin SDK identity adapter; no separate runtime to operate |
+| Database migrations | Flyway | Versioned plain-SQL migrations per service. Natural fit for Postgres + PostGIS DDL (extensions, geometry columns, spatial indexes); first-class Spring Boot auto-integration |
 | Mapping library | MapStruct | Compile-time type-safe mappers |
 | Testing | JUnit 5 + Mockito | |
 | Logging | SLF4J + Logback + Logstash Logback Encoder | SLF4J is the logging API; Logback is the implementation (bundled with Spring Boot); Logstash encoder outputs structured JSON in preprod and prod |

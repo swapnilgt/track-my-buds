@@ -28,42 +28,30 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` closed
     - **Provider-agnostic:** Firebase is accessed only behind identity-provider interfaces (verify token, provision on first login, revoke sessions). `AUTH_CREDENTIAL` stores a generic `provider` + `providerUid`; no API, interface, or data model exposes Firebase types; downstream services see only `X-User-Id`.
 - **Caveat:** documented in `api_contract.md` §1 and `high_level_architecture.md` — revisit Model A (own JWT + refresh strategy) if the product scales or needs to decouple from Firebase.
 
-### [ ] 3. Membership data propagation to Redis
-- **Gap:** Location Service reads each user's group-membership list from Redis to decide which Pub/Sub channels to publish to, but that data is owned by Group Service. No mechanism defines how membership changes reach that Redis cache.
-- **Why it matters:** Without it, location fanout targets stale groups — new members miss updates, removed members keep receiving them.
-- **Target document:** `high_level_architecture.md`.
-- **To decide:** Who writes the membership cache — e.g. Group Service writes it directly, or publishes a membership-change event that Location Service consumes and applies.
+### [x] 3. Membership data propagation to Redis
+- **Decided:** Location Service consumes `group.events` from Kafka and maintains its own `user:{userId}:groups` cache — `SADD` on `MEMBER_JOINED`, `SREM` on `MEMBER_REMOVED` / `MEMBER_LEFT`; only `ACTIVE` memberships are cached. On a cache miss it rebuilds from Group Service's internal read-through endpoint `GET /internal/users/{userId}/groups`. Group Service stays the single owner/producer; no direct cross-service cache writes. Documented in `high_level_architecture.md` ("Group Event Propagation" + Redis Location Cache).
 
-### [ ] 4. Kafka `group.events` payload schema
-- **Gap:** The topic exists but the event structure is undefined — event types, fields, and whether the event carries the target user's email + phone.
-- **Why it matters:** Notification Service needs contact info to send email/SMS; that data is owned by User Service. The payload decision determines whether Notification Service is self-sufficient or must call User Service.
-- **Target document:** `high_level_architecture.md` (Kafka section) + a schema definition.
-- **To decide:** Event type enum (invite / accept / promote / demote / remove), full field list, and whether contact details are embedded in the event or fetched on consume.
+### [x] 4. Kafka `group.events` payload schema
+- **Decided:** Common envelope (`eventId`, `type`, `occurredAt`, `groupId`, `groupName`, `actorUserId`, `payload`) with event types `MEMBER_INVITED` / `MEMBER_JOINED` / `MEMBER_REMOVED` / `MEMBER_LEFT` / `OWNER_PROMOTED` / `OWNER_DEMOTED` (+ reserved `GROUP_DELETED`). Keyed by `groupId` for per-group ordering; at-least-once with idempotent consumers. **Events carry ids only — no contact details**; Notification Service fetches email/phone from User Service on consume (contact data is owned there). Full schema + per-consumer behaviour table in `high_level_architecture.md` ("Group Event Propagation").
 
 ### [x] 5. Location-update transport
 - **Decided:** REST `POST /api/v1/locations` to Location Service through the Gateway, returning `202 Accepted`. The WebSocket stays receive-only for live location. Specified in `api_contract.md` §5.
 - **Still open:** update cadence / batching on the client side — a client-implementation detail, not a contract blocker.
 
-### [ ] 6. API Gateway technology
-- **Gap:** The Gateway is a core component but absent from `tech_stack.md`.
-- **Why it matters:** It owns JWT validation, rate limiting, and routing — needs choosing before those responsibilities can be built.
-- **Target document:** `tech_stack.md`.
-- **To decide:** Spring Cloud Gateway vs Kong vs Nginx vs other. **Requires user sign-off per project tech-stack rule.**
+### [x] 6. API Gateway technology
+- **Decided:** **Spring Cloud Gateway** (signed off). Keeps the Gateway in the Java/Spring ecosystem so per-request identity-token verification (Model B) sits alongside the Firebase Admin SDK identity adapter, with built-in filters for routing and rate limiting and no separate runtime to operate. Recorded in `tech_stack.md`.
 
 ---
 
 ## Medium — resolve during early implementation
 
-### [ ] 7. Inter-service communication & service-to-service auth
-- **Gap:** WebSocket Service already calls Group Service to verify membership, but the mechanism (REST? internal endpoint?) and how that call is authenticated are undefined.
+### [~] 7. Inter-service communication & service-to-service auth
+- **Transport decided:** synchronous REST over the internal network via dedicated `/internal/...` endpoints. Known internal calls: WebSocket → Group (membership verify), Location → Group (`GET /internal/users/{userId}/groups`, membership read-through), Notification → User (contact lookup). These endpoints are not exposed through the Gateway.
+- **Still open — service-to-service auth:** how internal calls are authenticated/authorized (internal network trust only, mTLS, or shared service tokens), and how `/internal/...` routes are kept off the public Gateway.
 - **Target document:** `high_level_architecture.md`.
-- **To decide:** Sync REST vs other; service-to-service auth (internal network trust, mTLS, or service tokens).
 
-### [ ] 8. Database migration tool
-- **Gap:** No schema-migration strategy chosen.
-- **Why it matters:** Spring Boot + PostgreSQL services need this from the first schema.
-- **Target document:** `tech_stack.md` + `clean_arch_backend_developer_context.md`.
-- **To decide:** Flyway vs Liquibase. **Requires user sign-off per project tech-stack rule.**
+### [x] 8. Database migration tool
+- **Decided:** **Flyway** (signed off). Versioned plain-SQL migrations per service — a natural fit for Postgres + PostGIS DDL (extensions, geometry columns, spatial indexes) with first-class Spring Boot auto-integration. Recorded in `tech_stack.md`.
 
 ### [ ] 9. Object storage bucket / key layout
 - **Gap:** MinIO is chosen but the bucket structure and object-key naming for avatars are undefined.
