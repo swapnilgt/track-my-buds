@@ -31,6 +31,16 @@ These apply to both the backend (Java / Spring Boot) and the client app (Flutter
 - Rule of thumb for placement: **business logic → unit test; anything exercising SQL (especially PostGIS), a driver, serialization, HTTP wiring, or a message broker → integration test.** Do not fake these with in-memory substitutes (e.g. H2 has no PostGIS) — the real behavior is the thing under test.
 - **Client:** unit-test BLoCs and use cases with mocked repositories; widget-test screens for state-to-UI rendering.
 
-## Reviewability
-- When creating the implementation plan, create the implementation plan in a way that the code generated is reviewable.
-- Keep changes small and single-purpose so each unit of work can be reviewed on its own.
+## Pull requests & reviewability
+- When creating an implementation plan, structure the work so that the code it produces is reviewable.
+- **Single purpose.** One reason to change per PR. Keep each unit of work small enough to be reviewed on its own; a change that touches, say, a persistence adapter *and* an unrelated endpoint *and* a UI screen is several PRs, not one.
+- **Size cap.** Every PR keeps its **changed lines of code (added + removed) ≤ 500**, excluding generated code and lockfiles (build-tool lockfiles, code-generator output, dependency/version-catalog regen). Count production and test code together — tests ship in the same PR as the code they cover. If a unit of work would exceed the cap, split it further.
+
+### Stacked pull requests
+When a change is an unavoidable dependency chain that cannot fit in a single ≤500-line PR (e.g. shared types / schema → repository → use case → I/O adapter → UI), split it into a **stack of dependent PRs** rather than one large PR — or several PRs that don't build on their own ([GitHub: About stacked pull requests](https://docs.github.com/en/pull-requests/get-started/about-stacked-prs)):
+
+- **Base-branch chaining.** The bottom PR targets the trunk (`main`). Each higher PR targets the branch of the PR directly below it as its base, so each PR's diff shows *only its own layer*, not the layers beneath it.
+- **Dependencies point downward.** Foundational changes (shared types, schema/migrations, domain ports) go in lower branches; code that depends on them goes in higher branches. If layer A depends on layer B, B must be in the same branch or a lower one.
+- **Merge bottom-up.** Merge the lowest PR first; the host retargets the PRs above it to the trunk and cascades the rebase. Never merge a higher PR before the one it sits on.
+- **Every layer stands on its own.** Each PR in the stack builds and passes its own tests green — a stack member still meets the full definition of done, just at smaller scope.
+- **Keep stacks short.** Prefer 2–4 PRs per stack. If a stack grows beyond that, the change is too big for one unit of work — reconsider the split. Start a fresh branch (not a taller stack) when switching concerns.

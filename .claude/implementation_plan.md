@@ -9,10 +9,19 @@ Read alongside: `high_level_architecture.md`, `domain_model.md`, `api_contract.m
 ## Guiding principles
 
 - **Vertical slices.** Build feature-by-feature end-to-end, not service-by-service. Every milestone produces something you can run from the app.
-- **Reviewable increments.** Each milestone is split into small, single-purpose PRs (listed per milestone). Tests ship with the code, never after.
+- **Reviewable increments.** Each milestone is split into small, single-purpose PRs (listed per milestone). Tests ship with the code, never after. Every PR stays **≤ 500 lines of changed code** (see *PR sizing & stacking* below) — split further when a listed PR would exceed that.
 - **Self-contained services.** Each backend service is an independent build with its own database, migrations, Dockerfile, and config, so any service (or the client app) can be lifted into its own repository later. **No shared library / shared kernel** between services — cross-cutting boilerplate (Problem Details handler, `X-User-Id` filter, event envelope) is scaffolded per service from a template rather than shared as a module. Services integrate only over REST and Kafka.
 - **Provider abstractions.** External providers (identity, push, email, SMS, object storage) sit behind domain ports with vendor code confined to a single adapter — on the backend *and* the client (see `generic_coding_guidelines.md`).
 - **Tests every slice.** Unit tests for logic (mocked ports, no Spring context); integration tests for anything touching real infrastructure, run against **Testcontainers** (Postgres+PostGIS, Redis, Kafka, MinIO).
+
+---
+
+## PR sizing & stacking
+
+The generic PR discipline — the **≤ 500 changed-line cap**, single-purpose PRs, and the **stacked-PR** mechanics (base-branch chaining, dependencies downward, bottom-up merge) — lives in `generic_coding_guidelines.md` and applies here. This section only records how it maps onto the milestones below.
+
+- The per-milestone **PRs** listed are the *intended units of review*, each a target of **≤ 500 lines**. If a listed PR would exceed the cap, split it further (e.g. entity + migration in one PR, use cases in the next, web adapter in the next).
+- Where a milestone's PRs form a natural dependency chain (marked *stackable* in that milestone), implement them as a bottom-up **stack** rather than one large PR. A typical layering order for a backend slice: (1) entity + Flyway migration + persistence adapter → (2) domain ports + use cases (unit-tested) → (3) web/messaging adapter + Problem Details wiring → (4) Gateway route/filter → (5) client datasource/repository → (6) client BLoC + screen. Each stacked PR still ships its own tests green (see *Definition of done*).
 
 ---
 
@@ -100,7 +109,7 @@ Dependency logic: M3 needs Group's internal member-resolution endpoint (M2) and 
 
 **Exit criteria:** `docker compose up` brings the stack up; every scaffolded build passes its tests (including a Testcontainers test); Gateway proxies a ping to the reference service; the app launches to the placeholder screen.
 
-**PRs:** (1) monorepo + Gradle + version catalog + README · (2) docker-compose infra + observability configs · (3) reference-service skeleton (clean-arch + Flyway + Testcontainers + logging/metrics) · (4) Gateway skeleton + route · (5) Flutter scaffold + DI.
+**PRs** (each ≤500 lines): (1) monorepo + Gradle + version catalog + README · (2) docker-compose infra + observability configs · (3) reference-service skeleton (clean-arch + Flyway + Testcontainers + logging/metrics) · (4) Gateway skeleton + route · (5) Flutter scaffold + DI. These are independent scaffolding PRs (no stack needed).
 
 ---
 
@@ -135,7 +144,7 @@ Dependency logic: M3 needs Group's internal member-resolution endpoint (M2) and 
 
 **Exit criteria:** from the app — sign in, onboard, activation gate flips open, profile GET/PATCH work, server logout revokes the session.
 
-**PRs:** (1) Auth session + identity ports/adapter + `AUTH_CREDENTIAL` · (2) User profile + activation · (3) User avatar (MinIO gateway + bucket) · (4) Gateway identity + activation filters + Redis cache · (5) client `AuthProvider` + Firebase adapter · (6) client onboarding + profile screens · (7) server-initiated logout.
+**PRs** (each ≤500 lines): (1) Auth session + identity ports/adapter + `AUTH_CREDENTIAL` · (2) User profile + activation · (3) User avatar (MinIO gateway + bucket) · (4) Gateway identity + activation filters + Redis cache · (5) client `AuthProvider` + Firebase adapter · (6) client onboarding + profile screens · (7) server-initiated logout. *Stackable:* the client chain (5 → 6) stacks on the Auth/User endpoints; if (1) or (2) exceeds the cap, split each into an entity+migration+persistence PR under a use-case+web-adapter PR.
 
 ---
 
@@ -160,7 +169,7 @@ Dependency logic: M3 needs Group's internal member-resolution endpoint (M2) and 
 
 **Exit criteria:** full group lifecycle from the app; events land on Kafka (verified by a test consumer).
 
-**PRs:** (1) group + membership entities + CRUD + rules · (2) invite/accept/leave/remove · (3) promote/demote + at-least-one-owner · (4) Kafka producer + envelope + internal endpoints · (5) group avatar · (6–7) client group screens.
+**PRs** (each ≤500 lines): (1) group + membership entities + CRUD + rules · (2) invite/accept/leave/remove · (3) promote/demote + at-least-one-owner · (4) Kafka producer + envelope + internal endpoints · (5) group avatar · (6–7) client group screens. *Stackable:* (1) is the base; (2)(3)(4) each depend on it — stack them on (1) and merge bottom-up so each diff is just its own membership/ownership/eventing layer. Split (1) if entities+CRUD together exceed the cap.
 
 ---
 
@@ -184,7 +193,7 @@ Dependency logic: M3 needs Group's internal member-resolution endpoint (M2) and 
 
 **Exit criteria:** post location from the app and see buddies' last-known on a map; disabling sharing blocks updates.
 
-**PRs:** (1) `USER_LOCATION` + PostGIS migration + persistence · (2) `POST /locations` + sharing check + Redis cache · (3) `GET /locations?groupId` + member resolution · (4) PostGIS centerpoint · (5–6) client map + sender.
+**PRs** (each ≤500 lines): (1) `USER_LOCATION` + PostGIS migration + persistence · (2) `POST /locations` + sharing check + Redis cache · (3) `GET /locations?groupId` + member resolution · (4) PostGIS centerpoint · (5–6) client map + sender. *Stackable:* (2)(3)(4) depend on (1) — stack on it; the client (5 → 6) stacks on the read/write endpoints.
 
 ---
 
@@ -210,7 +219,7 @@ Dependency logic: M3 needs Group's internal member-resolution endpoint (M2) and 
 
 **Exit criteria:** two devices see each other move live; a newly-accepted member starts receiving (cache `SADD`); a removed member stops (`SREM`).
 
-**PRs:** (1) Location publish to Pub/Sub + membership-cache consumer + read-through · (2) WebSocket handshake + auth · (3) subscribe/unsubscribe ref-count + membership verify · (4) catch-up + live push · (5) client live layer.
+**PRs** (each ≤500 lines): (1) Location publish to Pub/Sub + membership-cache consumer + read-through · (2) WebSocket handshake + auth · (3) subscribe/unsubscribe ref-count + membership verify · (4) catch-up + live push · (5) client live layer. *Stackable:* the WebSocket chain (2 → 3 → 4) is a natural stack; (5) stacks on (4).
 
 ---
 
@@ -232,7 +241,7 @@ Dependency logic: M3 needs Group's internal member-resolution endpoint (M2) and 
 
 **Exit criteria:** inviting / promoting / demoting a user triggers a notification (mock or real); dedupe verified on redelivery.
 
-**PRs:** (1) consumer + dedupe + event filtering · (2) User contact internal endpoint · (3) FCM push adapter + port · (4) email/SMS mock adapters behind ports · (5) client FCM registration + handling.
+**PRs** (each ≤500 lines): (1) consumer + dedupe + event filtering · (2) User contact internal endpoint · (3) FCM push adapter + port · (4) email/SMS mock adapters behind ports · (5) client FCM registration + handling. *Stackable:* (1) is the base; (3)(4) provider adapters stack on it. (2) is independent (lives in User Service).
 
 ---
 
@@ -261,9 +270,10 @@ Dependency logic: M3 needs Group's internal member-resolution endpoint (M2) and 
 ## Definition of done (per PR)
 
 - Code + tests in the same PR; unit and integration tests pass; build green.
+- **≤ 500 changed lines** and single-purpose, per `generic_coding_guidelines.md`. Over the cap → split, or turn the slice into a stack (see *PR sizing & stacking*).
 - New endpoints match `api_contract.md`; new persistence has a Flyway migration.
 - No provider/vendor type leaks past its adapter.
-- PR is single-purpose and independently reviewable.
+- PR is single-purpose and independently reviewable. If part of a stack: it builds on its own, targets the branch below it, and is merged bottom-up.
 
 ---
 
