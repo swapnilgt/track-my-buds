@@ -1,0 +1,73 @@
+# Track My Buds — shared Gradle version catalog
+#
+# This is the canonical dependency catalog for every backend service. Each service
+# is a STANDALONE Gradle build and references this file from its settings.gradle.kts:
+#
+#   dependencyResolutionManagement {
+#     versionCatalogs { create("libs") { from(files("../gradle/libs.versions.toml")) } }
+#   }
+#
+# On extraction to its own repository, a service copies this file in and updates the
+# path. Versions below are the initial pinned set — bump deliberately, in one place.
+
+[versions]
+java = "21"
+springBoot = "3.4.1"
+springDependencyManagement = "1.1.7"
+springCloud = "2024.0.0"
+mapstruct = "1.6.3"
+logstashEncoder = "8.0"
+testcontainers = "1.20.4"
+firebaseAdmin = "9.4.3"
+postgis = "2023.1.0"
+
+[libraries]
+# --- Spring Boot starters (versions managed by the Spring Boot BOM) ---
+spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
+spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
+spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
+spring-boot-starter-validation = { module = "org.springframework.boot:spring-boot-starter-validation" }
+spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+
+# --- Spring Cloud Gateway (version managed by the Spring Cloud BOM) ---
+spring-cloud-starter-gateway = { module = "org.springframework.cloud:spring-cloud-starter-gateway" }
+
+# --- Messaging ---
+spring-kafka = { module = "org.springframework.kafka:spring-kafka" }
+spring-kafka-test = { module = "org.springframework.kafka:spring-kafka-test" }
+
+# --- Observability (versions managed by the Spring Boot BOM) ---
+micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus" }
+micrometer-tracing-bridge-brave = { module = "io.micrometer:micrometer-tracing-bridge-brave" }
+zipkin-reporter-brave = { module = "io.zipkin.reporter2:zipkin-reporter-brave" }
+logstash-logback-encoder = { module = "net.logstash.logback:logstash-logback-encoder", version.ref = "logstashEncoder" }
+
+# --- Persistence: migrations, driver, spatial (Flyway/driver/hibernate versions from the Boot BOM) ---
+flyway-core = { module = "org.flywaydb:flyway-core" }
+flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }
+postgresql = { module = "org.postgresql:postgresql" }
+hibernate-spatial = { module = "org.hibernate.orm:hibernate-spatial" }
+postgis-jdbc = { module = "net.postgis:postgis-jdbc", version.ref = "postgis" }
+
+# --- Mapping ---
+mapstruct = { module = "org.mapstruct:mapstruct", version.ref = "mapstruct" }
+mapstruct-processor = { module = "org.mapstruct:mapstruct-processor", version.ref = "mapstruct" }
+
+# --- Identity provider (confined to adapter/out/identity) ---
+firebase-admin = { module = "com.google.firebase:firebase-admin", version.ref = "firebaseAdmin" }
+
+# --- Testing: Testcontainers (versions via the Testcontainers BOM) ---
+testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
+testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter" }
+testcontainers-postgresql = { module = "org.testcontainers:postgresql" }
+testcontainers-kafka = { module = "org.testcontainers:kafka" }
+testcontainers-minio = { module = "org.testcontainers:minio" }
+
+[bundles]
+observability = ["micrometer-registry-prometheus", "micrometer-tracing-bridge-brave", "zipkin-reporter-brave"]
+mapstruct = ["mapstruct"]
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "springDependencyManagement" }

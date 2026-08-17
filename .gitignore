@@ -1,24 +1,63 @@
-# Compiled class file
+# ─────────────────────────────────────────────────────────────
+# Track My Buds — repository .gitignore
+# Covers backend (Java/Gradle) and client-app (Flutter), IDE, OS.
+# ─────────────────────────────────────────────────────────────
+
+# ── Java / JVM ──
 *.class
-
-# Log file
-*.log
-
-# BlueJ files
+hs_err_pid*
+replay_pid*
 *.ctxt
-
-# Mobile Tools for Java (J2ME)
 .mtj.tmp/
 
-# Package Files #
+# ── Gradle ──
+.gradle/
+**/build/
+!**/src/**/build/
+# Ignore archives in general, but NEVER the committed Gradle wrapper jar
 *.jar
 *.war
 *.nar
 *.ear
+!gradle/wrapper/gradle-wrapper.jar
+
+# ── Flutter / Dart (client-app) ──
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.pub-cache/
+**/.pub/
+**/doc/api/
+**/coverage/
+# Generated code (build_runner) is regenerated, not committed
+**/*.g.dart
+**/*.freezed.dart
+**/*.config.dart
+
+# ── Local infra / env / secrets ──
+.env
+*.local.env
+# Firebase service-account keys must never be committed
+**/*-firebase-adminsdk-*.json
+**/google-services.json
+**/GoogleService-Info.plist
+# Docker-compose bind-mount volumes
+backend/.data/
+
+# ── Logs & archives ──
+*.log
 *.zip
 *.tar.gz
 *.rar
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-replay_pid*
+# ── IDE / editor ──
+.idea/
+*.iml
+.vscode/
+*.swp
+*~
+
+# ── OS ──
+.DS_Store
+Thumbs.db

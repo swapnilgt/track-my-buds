@@ -1,0 +1,39 @@
+# EditorConfig for the Track My Buds backend — https://editorconfig.org
+# Applies to every standalone service build under backend/.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+max_line_length = 120
+
+# Java sources
+[*.java]
+indent_size = 4
+ij_java_class_count_to_use_import_on_demand = 999
+ij_java_names_count_to_use_import_on_demand = 999
+
+# Gradle Kotlin DSL
+[*.{kts,kt}]
+indent_size = 4
+
+# Config / data files
+[*.{yml,yaml,toml,json}]
+indent_size = 2
+
+# SQL migrations
+[*.sql]
+indent_size = 2
+
+# Markdown — keep trailing whitespace (hard line breaks)
+[*.md]
+trim_trailing_whitespace = false
+
+# Gradle wrapper scripts are generated — leave them alone
+[{gradlew,gradlew.bat}]
+trim_trailing_whitespace = false
+insert_final_newline = false

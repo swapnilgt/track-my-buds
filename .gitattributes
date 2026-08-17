@@ -1,0 +1,36 @@
+# Track My Buds — line-ending & diff normalization
+# Normalize all text files to LF in the repository; check out native on Windows.
+* text=auto
+
+# Scripts that MUST stay LF regardless of platform (break on Linux/CI otherwise)
+gradlew        text eol=lf
+*.sh           text eol=lf
+
+# Windows-only scripts stay CRLF
+gradlew.bat    text eol=crlf
+*.bat          text eol=crlf
+*.cmd          text eol=crlf
+
+# Source & config: normalized text (LF in repo)
+*.java         text
+*.kt           text
+*.kts          text
+*.dart         text
+*.sql          text
+*.yml          text
+*.yaml         text
+*.toml         text
+*.json         text
+*.md           text
+*.properties   text
+*.xml          text
+
+# Binary assets — never touch line endings, don't diff as text
+*.jar          binary
+*.png          binary
+*.jpg          binary
+*.jpeg         binary
+*.gif          binary
+*.ico          binary
+*.keystore     binary
+*.jks          binary

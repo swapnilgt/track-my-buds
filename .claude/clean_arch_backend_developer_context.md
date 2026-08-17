@@ -153,9 +153,13 @@ backend/<service-name>/
 │       └── java/com/trackmybuds/<service-name>/
 │           ├── unit/
 │           └── integration/
-├── pom.xml
+├── build.gradle.kts
+├── settings.gradle.kts
+├── gradlew  gradlew.bat  gradle/wrapper/
 └── Dockerfile
 ```
+
+Each service is a **standalone Gradle build** (its own `settings.gradle.kts` and wrapper) so it can be lifted into its own repository without touching a parent build. Services share the version catalog at `backend/gradle/libs.versions.toml` via a relative `from(files(...))` reference in `settings.gradle.kts`; on extraction the catalog is copied into the service and the path updated. There is **no** root aggregating Gradle build and no shared module — see `implementation_plan.md`.
 
 ---
 
@@ -179,15 +183,17 @@ backend/<service-name>/
 
 ## 5. Setup — Run below steps when asked to run the basic setup.
 - Create the folder structure as described above for the service.
-- Add Spring Boot starter dependencies in `pom.xml`: `spring-boot-starter-web`, `spring-boot-starter-data-jpa`, `spring-boot-starter-validation`.
-- Add `spring-boot-starter-actuator` and `micrometer-registry-prometheus` to `pom.xml` for metrics and health checks.
-- Add `micrometer-tracing-bridge-brave` and `zipkin-reporter-brave` to `pom.xml` for distributed tracing.
-- Add `logstash-logback-encoder` to `pom.xml` for structured JSON logging in preprod and prod.
-- Add `spring-boot-starter-test`, `mockito-core` in test scope in `pom.xml`.
-- Add MapStruct dependency in `pom.xml` with the annotation processor configured.
+- Build with **Gradle (Kotlin DSL)**: `build.gradle.kts` + `settings.gradle.kts`, applying the `org.springframework.boot` and `io.spring.dependency-management` plugins and the Java toolchain pinned to **Java 21**. Generate the Gradle wrapper (`gradlew`, `gradlew.bat`, `gradle/wrapper/`) so the build runs without a system Gradle.
+- Declare dependency versions through the shared version catalog (`backend/gradle/libs.versions.toml`), referenced from `settings.gradle.kts`; use catalog aliases (`libs.…`) in `build.gradle.kts` rather than hard-coded versions.
+- Add Spring Boot starter dependencies: `spring-boot-starter-web`, `spring-boot-starter-data-jpa`, `spring-boot-starter-validation`.
+- Add `spring-boot-starter-actuator` and `micrometer-registry-prometheus` for metrics and health checks.
+- Add `micrometer-tracing-bridge-brave` and `zipkin-reporter-brave` for distributed tracing.
+- Add `logstash-logback-encoder` for structured JSON logging in preprod and prod.
+- Add `spring-boot-starter-test` and `mockito-core` in the `testImplementation` configuration; add `org.testcontainers:junit-jupiter` (+ the relevant Testcontainers modules) for integration tests.
+- Add MapStruct with its annotation processor wired via `annotationProcessor`.
 - Create `application.yml` and environment-specific yml files under `src/main/resources/`.
 - Create the main `@SpringBootApplication` entry point class in the root package.
-- Add a `Dockerfile` using a multi-stage build: compile with a JDK image, run with a JRE image.
+- Add a `Dockerfile` using a multi-stage build: compile with a JDK 21 image, run with a JRE 21 image.
 
 ---
 
@@ -205,4 +211,4 @@ backend/<service-name>/
 | **Environment config** | Environment-specific Dart files | Spring profiles via `application-{profile}.yml`; active profile set by `SPRING_PROFILES_ACTIVE` |
 | **Testing setup** | Mockito + Flutter test + Build Runner | JUnit 5 + Mockito; `@SpringBootTest` for integration; `@DataJpaTest` for JPA layer |
 | **Entry point** | `main.dart` — sets up DI and router | `@SpringBootApplication` class — Spring auto-configures everything |
-| **Build file** | `pubspec.yaml` | `pom.xml` |
+| **Build file** | `pubspec.yaml` | `build.gradle.kts` + `settings.gradle.kts` (Gradle, Kotlin DSL) |
