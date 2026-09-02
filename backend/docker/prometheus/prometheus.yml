@@ -1,0 +1,27 @@
+# Prometheus scrape config for local development.
+#
+# Spring Boot services expose metrics at /actuator/prometheus. During early
+# milestones services usually run on the host via `./gradlew bootRun`, so they
+# are scraped through host.docker.internal. Jobs stay defined even before a
+# service exists — targets simply report as "down" until the service is up.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: trackmybuds-services
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - "host.docker.internal:8080"   # gateway
+          - "host.docker.internal:8081"   # user-service
+          - "host.docker.internal:8082"   # auth-service
+          - "host.docker.internal:8083"   # group-service
+          - "host.docker.internal:8084"   # location-service
+          - "host.docker.internal:8085"   # websocket-service
+          - "host.docker.internal:8086"   # notification-service

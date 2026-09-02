@@ -15,7 +15,7 @@ Three environments are maintained: local, pre-production, and production. Cloud 
 |-----------|-------|
 | PostgreSQL + PostGIS | Single container |
 | Redis | Single container (serves both location cache and Pub/Sub) |
-| Kafka | Single broker container with a Zookeeper container |
+| Kafka | Single broker container in KRaft mode (no Zookeeper) |
 | MinIO | Single container (S3-compatible object store for avatars); console UI exposed on localhost |
 | All backend services | Individual containers via Docker Compose |
 | API Gateway | Single container |
