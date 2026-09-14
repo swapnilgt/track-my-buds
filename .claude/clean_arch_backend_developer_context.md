@@ -9,7 +9,8 @@ Whenever generating code, use the structure described in this document.
 ## 1. Architecture Components
 
 ### Domain Layer
-- Contains core business logic, free of any framework or infrastructure dependency.
+- Contains core business logic. Domain **entities and port interfaces** (`entity`, `repository`, `gateway`, and the `usecase` inbound-port interfaces) are free of any framework or infrastructure dependency — no Spring, JPA, or vendor types.
+- **Exception — use-case implementations:** the `usecase` implementation classes are the one place in the domain layer that carries Spring stereotypes. They are annotated `@Service` and use constructor injection (including `@Value`-bound config), because they are the application's composition point where domain ports are wired together. They still depend **only** on domain ports and entities — never on persistence, web, messaging, or vendor types (those stay behind the ports).
 - Package: `domain`
 - Sub-packages:
     - `entity` — Domain entities as plain Kotlin classes, typically immutable `data class`es (no JPA or framework annotations).
