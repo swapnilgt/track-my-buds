@@ -1,6 +1,6 @@
 # Clean Architecture — Backend Developer Context
 
-We are following clean architecture for all backend services. Each service lives in its own directory under `backend/<service-name>/`. The Java source root for each service is `src/main/java/com/trackmybuds/<service-name>/`. All package paths below are relative to that root.
+We are following clean architecture for all backend services. Services are written in **Kotlin** on Spring Boot. Each service lives in its own directory under `backend/<service-name>/`. The Kotlin source root for each service is `src/main/kotlin/com/trackmybuds/<service-name>/`. All package paths below are relative to that root.
 
 Whenever generating code, use the structure described in this document.
 
@@ -12,7 +12,7 @@ Whenever generating code, use the structure described in this document.
 - Contains core business logic, free of any framework or infrastructure dependency.
 - Package: `domain`
 - Sub-packages:
-    - `entity` — Domain entities as plain Java classes (no JPA or framework annotations).
+    - `entity` — Domain entities as plain Kotlin classes, typically immutable `data class`es (no JPA or framework annotations).
     - `repository` — Repository interfaces (outbound ports) for **persistence** — database and cache. Implemented by outbound adapters.
     - `gateway` — Outbound port interfaces for **external third-party services** (identity provider, push, email, SMS, object storage). Provider-agnostic: they accept and return only our own types — no vendor SDK types leak through. Implemented by outbound adapters.
     - `usecase` — Use case interfaces (inbound ports) and their implementations. Each use case class handles a single operation.
@@ -21,15 +21,15 @@ Whenever generating code, use the structure described in this document.
 - Classes that receive calls from outside and drive the application. Each adapter calls use case interfaces in the domain layer.
 - Package: `adapter/in`
 - Sub-packages:
-    - `web` — REST controllers annotated with `@RestController`. One controller class per domain resource. Contains request/response DTOs, their `@Valid` Bean Validation annotations, MapStruct mappers (DTO ↔ domain entity), and the global exception handler (`@ControllerAdvice`).
+    - `web` — REST controllers annotated with `@RestController`. One controller class per domain resource. Contains request/response DTOs (Kotlin `data class`es) with their `@Valid` Bean Validation annotations, hand-written extension-function mappers (DTO ↔ domain), and the global exception handler (`@RestControllerAdvice`).
     - `messaging` — Kafka consumers annotated with `@KafkaListener`. One consumer class per Kafka topic. Present only in services that consume Kafka events (e.g. Notification Service).
 
 ### Outbound Adapters (`adapter/out`)
 - Classes that the application calls to reach external systems. Each adapter implements a `domain/repository` (persistence) or `domain/gateway` (external service) port — the domain depends only on the interface, never on the adapter.
 - Package: `adapter/out`
 - Sub-packages:
-    - `persistence` — Spring Data JPA implementations for PostgreSQL. Contains JPA entity models (annotated with `@Entity`), Spring Data JPA repository interfaces, the repository implementation class that implements the domain repository interface, and MapStruct mappers (JPA entity ↔ domain entity). All co-located per domain resource.
-    - `cache` — Redis implementations for location cache and Pub/Sub. Contains the implementation class and its MapStruct mapper.
+    - `persistence` — Spring Data JPA implementations for PostgreSQL. Contains JPA entity models (annotated with `@Entity`; written as mutable Kotlin `class`es — **not** `data class`es — relying on the `kotlin-jpa` no-arg plugin, to avoid JPA identity/equality pitfalls), Spring Data JPA repository interfaces, the repository implementation class that implements the domain repository interface, and extension-function mappers (JPA entity ↔ domain). All co-located per domain resource.
+    - `cache` — Redis implementations for location cache and Pub/Sub. Contains the implementation class and its extension-function mapper.
     - `identity` — Identity-provider gateway implementation (Firebase today). Implements the `domain/gateway` identity ports; the **only** place identity-provider SDK types may appear. See "Identity Provider" below.
     - `web` — HTTP client implementations for other external REST APIs. Contains the client class and its mapper.
     - `messaging` — Kafka producers. Called directly by controllers after a successful use case execution. Present only in services that publish Kafka events (e.g. Group Service).
@@ -114,7 +114,7 @@ Rules:
 
 ## Dependency Injection
 - Spring Boot's built-in DI is used — no external DI library required.
-- Always use **constructor injection**. Never use field injection (`@Autowired` on fields).
+- Always use **constructor injection** — declare dependencies in the class's primary constructor. Never use field injection (`@Autowired` / `lateinit` on properties).
 - Beans are auto-discovered via Spring's component scan. Use `@Service`, `@Component`, and `@Repository` on implementation classes.
 - Explicit bean wiring goes in `@Configuration` classes inside the `config` package.
 
@@ -126,7 +126,7 @@ Rules:
 backend/<service-name>/
 ├── src/
 │   ├── main/
-│   │   ├── java/com/trackmybuds/<service-name>/
+│   │   ├── kotlin/com/trackmybuds/<service-name>/
 │   │   │   ├── domain/
 │   │   │   │   ├── entity/
 │   │   │   │   ├── repository/         (persistence ports)
@@ -150,7 +150,7 @@ backend/<service-name>/
 │   │       ├── application-preprod.yml
 │   │       └── application-prod.yml
 │   └── test/
-│       └── java/com/trackmybuds/<service-name>/
+│       └── kotlin/com/trackmybuds/<service-name>/
 │           ├── unit/
 │           └── integration/
 ├── build.gradle.kts
@@ -173,7 +173,7 @@ Each service is a **standalone Gradle build** (its own `settings.gradle.kts` and
 
 ## 4. Testing
 - Use JUnit 5 for all tests.
-- Use Mockito for mocking dependencies in unit tests.
+- Use MockK for mocking dependencies in unit tests (Kotlin-native; mocks final-by-default classes without extra config).
 - Unit tests go in `src/test/java/.../unit/` and test individual classes in isolation.
 - Integration tests go in `src/test/java/.../integration/` and use `@SpringBootTest` or `@DataJpaTest` to test with real Spring context or real DB layer.
 - Integration tests run their backing infrastructure with **Testcontainers** — a real PostgreSQL+PostGIS container for persistence/spatial tests, and real Redis / Kafka / MinIO containers where the code under test uses them. Do not substitute in-memory fakes (e.g. H2) for these: PostGIS spatial SQL, Redis Pub/Sub, and Kafka semantics must be exercised against the real engines. Docker is therefore a test-time dependency.
@@ -183,32 +183,32 @@ Each service is a **standalone Gradle build** (its own `settings.gradle.kts` and
 
 ## 5. Setup — Run below steps when asked to run the basic setup.
 - Create the folder structure as described above for the service.
-- Build with **Gradle (Kotlin DSL)**: `build.gradle.kts` + `settings.gradle.kts`, applying the `org.springframework.boot` and `io.spring.dependency-management` plugins and the Java toolchain pinned to **Java 21**. Generate the Gradle wrapper (`gradlew`, `gradlew.bat`, `gradle/wrapper/`) so the build runs without a system Gradle.
+- Build with **Gradle (Kotlin DSL)**: `build.gradle.kts` + `settings.gradle.kts`, applying the Kotlin JVM plugin, `org.jetbrains.kotlin.plugin.spring` (all-open — lets Spring proxy Kotlin's final-by-default classes) and `org.jetbrains.kotlin.plugin.jpa` (no-arg — for JPA entities), plus the `org.springframework.boot` and `io.spring.dependency-management` plugins. Pin the toolchain with `kotlin { jvmToolchain(21) }` (JDK 21). Generate the Gradle wrapper (`gradlew`, `gradlew.bat`, `gradle/wrapper/`) so the build runs without a system Gradle.
 - Declare dependency versions through the shared version catalog (`backend/gradle/libs.versions.toml`), referenced from `settings.gradle.kts`; use catalog aliases (`libs.…`) in `build.gradle.kts` rather than hard-coded versions.
 - Add Spring Boot starter dependencies: `spring-boot-starter-web`, `spring-boot-starter-data-jpa`, `spring-boot-starter-validation`.
 - Add `spring-boot-starter-actuator` and `micrometer-registry-prometheus` for metrics and health checks.
 - Add `micrometer-tracing-bridge-brave` and `zipkin-reporter-brave` for distributed tracing.
 - Add `logstash-logback-encoder` for structured JSON logging in preprod and prod.
-- Add `spring-boot-starter-test` and `mockito-core` in the `testImplementation` configuration; add `org.testcontainers:junit-jupiter` (+ the relevant Testcontainers modules) for integration tests.
-- Add MapStruct with its annotation processor wired via `annotationProcessor`.
+- Add `spring-boot-starter-test` and `io.mockk:mockk` in the `testImplementation` configuration (add `com.ninja-squad:springmockk` only if MockK beans are needed inside a `@SpringBootTest`); add `org.testcontainers:junit-jupiter` (+ the relevant Testcontainers modules) for integration tests.
+- Mapping between layers is done with **hand-written Kotlin extension functions** (`fun Source.toTarget()`) co-located with the adapter that owns the mapping — no mapping library and no annotation processor.
 - Create `application.yml` and environment-specific yml files under `src/main/resources/`.
-- Create the main `@SpringBootApplication` entry point class in the root package.
+- Create the `@SpringBootApplication` class plus a top-level `fun main(args: Array<String>) { runApplication<...>(*args) }` in the root package.
 - Add a `Dockerfile` using a multi-stage build: compile with a JDK 21 image, run with a JRE 21 image.
 
 ---
 
 ## Notable Differences vs Flutter Clean Architecture
 
-| Concern | Flutter | Backend (Java / Spring Boot) |
+| Concern | Flutter | Backend (Kotlin / Spring Boot) |
 |---------|---------|------------------------------|
 | **Dependency injection** | GetIt — manual registration in `injection.dart` | Spring built-in — auto-discovery via annotations; constructor injection always |
 | **Presentation layer** | Screens + BLoC (events, states) — stateful, UI-driven | REST controllers + DTOs — stateless, request/response |
 | **State management** | BLoC manages UI state across events | None — each HTTP request is independent and stateless |
 | **Adapter organisation** | `implementation/data/datasource/local\|remote\|mock/` — grouped by datasource type under a shared implementation layer | `adapter/in/web\|messaging` and `adapter/out/persistence\|cache\|web\|messaging\|mock` — split by direction (inbound vs outbound) |
 | **Mapper placement** | Shared `mapper/` folder under implementation | Co-located with the adapter that owns the mapping: infrastructure mappers in `adapter/out/<technology>/`, DTO mappers in `adapter/in/web/` |
-| **Mapper library** | Manual mappers | MapStruct — generates mapper implementations at compile time |
+| **Mapper library** | Manual mappers | Hand-written Kotlin extension functions (`fun A.toB()`) — no library; constructor-based construction gives compile-time "missing field" safety for domain/DTOs |
 | **Messaging** | Not applicable | `adapter/in/messaging/` for Kafka consumers; `adapter/out/messaging/` for Kafka producers |
 | **Environment config** | Environment-specific Dart files | Spring profiles via `application-{profile}.yml`; active profile set by `SPRING_PROFILES_ACTIVE` |
-| **Testing setup** | Mockito + Flutter test + Build Runner | JUnit 5 + Mockito; `@SpringBootTest` for integration; `@DataJpaTest` for JPA layer |
+| **Testing setup** | Mockito + Flutter test + Build Runner | JUnit 5 + MockK; `@SpringBootTest` for integration; `@DataJpaTest` for JPA layer |
 | **Entry point** | `main.dart` — sets up DI and router | `@SpringBootApplication` class — Spring auto-configures everything |
 | **Build file** | `pubspec.yaml` | `build.gradle.kts` + `settings.gradle.kts` (Gradle, Kotlin DSL) |

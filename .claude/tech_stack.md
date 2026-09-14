@@ -10,15 +10,15 @@
 ## Backend Services
 | Concern | Choice | Notes |
 |---------|--------|-------|
-| Language / Framework | Java 21 (LTS) / Spring Boot 3.x | Virtual threads available for the WebSocket + I/O-heavy services |
-| Build tool | Gradle (Kotlin DSL) | Faster incremental builds and cleaner multi-module ergonomics for the monorepo of self-contained services |
+| Language / Framework | Kotlin (on JDK 21 LTS) / Spring Boot 3.x | Kotlin across all backend services + the Gateway. Compiles to JVM 21 bytecode; virtual threads available for the WebSocket + I/O-heavy services. Spring MVC (not WebFlux / coroutines) |
+| Build tool | Gradle (Kotlin DSL) | Faster incremental builds and cleaner multi-module ergonomics for the monorepo of self-contained services. Applies the Kotlin JVM, `kotlin-spring` (all-open, so Spring can proxy Kotlin's final-by-default classes), and `kotlin-jpa` (no-arg, for JPA entities) plugins |
 | Architecture style | Microservices | |
 | Service data isolation | Database-per-service (PostgreSQL) | Each service owns a separate logical database — own connection, credentials, and Flyway history. Most faithful to the "extract to its own repo/infra later" constraint. Locally, multiple databases in one Postgres container |
 | Local orchestration | Docker Compose | One compose stack brings up Postgres+PostGIS, Redis, Kafka, MinIO, and observability (Prometheus/Grafana/Zipkin) for local dev |
-| API Gateway | Spring Cloud Gateway | Single entry point — routing, rate limiting, and per-request identity-token verification (Model B). Stays in the Java/Spring ecosystem so token verification sits alongside the Firebase Admin SDK identity adapter; no separate runtime to operate |
+| API Gateway | Spring Cloud Gateway | Single entry point — routing, rate limiting, and per-request identity-token verification (Model B). Stays in the JVM/Spring ecosystem so token verification sits alongside the Firebase Admin SDK identity adapter; no separate runtime to operate |
 | Database migrations | Flyway | Versioned plain-SQL migrations per service. Natural fit for Postgres + PostGIS DDL (extensions, geometry columns, spatial indexes); first-class Spring Boot auto-integration |
-| Mapping library | MapStruct | Compile-time type-safe mappers |
-| Unit testing | JUnit 5 + Mockito | |
+| Object mapping | Hand-written Kotlin extension-function mappers | No mapping library. Kotlin data classes + extension functions keep boundary mapping (JPA ↔ domain, domain ↔ DTO) a trivial one-liner and fully null-safe; constructing targets via their primary constructor with named args gives compile-time "missing field" safety for domain objects and DTOs. Avoids kapt (MapStruct has no KSP support and slows Kotlin builds) |
+| Unit testing | JUnit 5 + MockK | MockK is Kotlin-native — mocks Kotlin's final-by-default classes with no extra config (unlike Mockito). Clean-arch unit tests primarily use hand-written mock adapters in `adapter/out/mock`; MockK is used where a hand-written mock would be overkill |
 | Integration testing | Testcontainers | Spins up real PostgreSQL+PostGIS, Redis, Kafka, and MinIO in Docker for integration tests. Required because PostGIS spatial SQL, Redis Pub/Sub, and Kafka semantics cannot be faithfully reproduced by in-memory fakes (e.g. H2 has no PostGIS). Adds Docker as a test-time dependency |
 | Logging | SLF4J + Logback + Logstash Logback Encoder | SLF4J is the logging API; Logback is the implementation (bundled with Spring Boot); Logstash encoder outputs structured JSON in preprod and prod |
 | Metrics collection | Spring Boot Actuator + Micrometer | Bundled with Spring Boot. Actuator exposes `/actuator/health` and `/actuator/prometheus`; Micrometer collects JVM, HTTP, DB pool, and Kafka metrics automatically |

@@ -29,7 +29,7 @@ The generic PR discipline — the **≤ 500 changed-line cap**, single-purpose P
 
 | Concern | Choice |
 |---------|--------|
-| Language / runtime | Java 21 (LTS), Spring Boot 3.x |
+| Language / runtime | Kotlin (on JDK 21 LTS), Spring Boot 3.x |
 | Build tool | Gradle (Kotlin DSL) |
 | API Gateway | Spring Cloud Gateway |
 | Migrations | Flyway (per service) |
@@ -60,7 +60,7 @@ backend/
   websocket-service/
   notification-service/
     build.gradle.kts settings.gradle.kts gradlew Dockerfile
-    src/main/java/...         # clean-arch packages (see backend context doc)
+    src/main/kotlin/...       # clean-arch packages (see backend context doc)
     src/main/resources/
       application.yml
       db/migration/           # Flyway V__*.sql

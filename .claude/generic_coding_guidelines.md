@@ -1,6 +1,6 @@
 # Generic Coding Guidelines
 
-These apply to both the backend (Java / Spring Boot) and the client app (Flutter / Dart). Language-specific low-level design lives in `clean_arch_backend_developer_context.md` and `clean_arch_flutter_developer_context.md`; the API contract's error format lives in `api_contract.md`.
+These apply to both the backend (Kotlin / Spring Boot) and the client app (Flutter / Dart). Language-specific low-level design lives in `clean_arch_backend_developer_context.md` and `clean_arch_flutter_developer_context.md`; the API contract's error format lives in `api_contract.md`.
 
 ## Architecture & abstractions
 - Always use an interface definition between any two layers in the low-level design.
@@ -12,7 +12,7 @@ These apply to both the backend (Java / Spring Boot) and the client app (Flutter
 ## Naming conventions
 - Names are intention-revealing. Prefer clarity over brevity; avoid non-obvious abbreviations.
 - Interfaces (ports) are named for the capability, not the implementation, and take **no** `I`/`Impl` decoration — e.g. `IdentityTokenVerifier`, `LocationRepository`. Adapters are named for the capability **plus** their technology — e.g. `FirebaseIdentityTokenVerifier`, `PostgresLocationRepository`, `RedisMembershipCache`.
-- **Backend (Java):** `PascalCase` for types, `camelCase` for methods/fields, `UPPER_SNAKE_CASE` for constants, all-lowercase package names. Request/response DTOs are suffixed `Request` / `Response`; JPA entities suffixed `Entity` (kept out of the domain); MapStruct mappers suffixed `Mapper`; use cases named for the action they perform (e.g. `InviteMemberUseCase`).
+- **Backend (Kotlin):** `PascalCase` for types, `camelCase` for functions/properties, `UPPER_SNAKE_CASE` for constants, all-lowercase package names; one file per public type (`.kt`), file named after the type. Request/response DTOs are suffixed `Request` / `Response` (Kotlin `data class`es); JPA entities suffixed `Entity` (kept out of the domain); boundary mapping is done with **hand-written extension functions** — `fun <SourceType>.to<TargetType>()` (e.g. `HeartbeatEntity.toDomain()`, `Heartbeat.toResponse()`) co-located with the adapter that owns the mapping; use cases named for the action they perform (e.g. `InviteMemberUseCase`).
 - **Client (Dart):** `PascalCase` for types, `camelCase` for members, `snake_case` for file names (following the structure in the Flutter context doc, e.g. `home_screen_bloc.dart`).
 - Booleans read as predicates (`isActive`, `locationSharingEnabled`); collections are plural.
 
@@ -26,7 +26,7 @@ These apply to both the backend (Java / Spring Boot) and the client app (Flutter
 
 ## Testing — unit vs integration
 - **Always include test cases with the new code written.** Every feature PR ships with its tests.
-- **Unit tests** cover pure logic in isolation — use cases, domain rules, mappers, validators — with ports replaced by mocks (`adapter/out/mock` implementations or Mockito). No Spring context, no Docker, no network. These are the bulk of the tests and must stay fast.
+- **Unit tests** cover pure logic in isolation — use cases, domain rules, mappers, validators — with ports replaced by mocks (`adapter/out/mock` implementations or MockK). No Spring context, no Docker, no network. These are the bulk of the tests and must stay fast.
 - **Integration tests** cover code that touches real infrastructure or serialization boundaries, run against real engines via **Testcontainers**: persistence/spatial adapters against PostgreSQL+PostGIS, cache/pub-sub against Redis, event producers/consumers against Kafka, object-storage adapters against MinIO; the web layer via `@SpringBootTest` / MockMvc.
 - Rule of thumb for placement: **business logic → unit test; anything exercising SQL (especially PostGIS), a driver, serialization, HTTP wiring, or a message broker → integration test.** Do not fake these with in-memory substitutes (e.g. H2 has no PostGIS) — the real behavior is the thing under test.
 - **Client:** unit-test BLoCs and use cases with mocked repositories; widget-test screens for state-to-UI rendering.

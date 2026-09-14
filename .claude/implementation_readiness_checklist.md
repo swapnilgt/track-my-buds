@@ -39,7 +39,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` closed
 - **Still open:** update cadence / batching on the client side — a client-implementation detail, not a contract blocker.
 
 ### [x] 6. API Gateway technology
-- **Decided:** **Spring Cloud Gateway** (signed off). Keeps the Gateway in the Java/Spring ecosystem so per-request identity-token verification (Model B) sits alongside the Firebase Admin SDK identity adapter, with built-in filters for routing and rate limiting and no separate runtime to operate. Recorded in `tech_stack.md`.
+- **Decided:** **Spring Cloud Gateway** (signed off). Keeps the Gateway in the JVM/Spring ecosystem so per-request identity-token verification (Model B) sits alongside the Firebase Admin SDK identity adapter, with built-in filters for routing and rate limiting and no separate runtime to operate. Recorded in `tech_stack.md`.
 
 ---
 

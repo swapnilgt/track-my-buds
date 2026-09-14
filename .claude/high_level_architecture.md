@@ -276,7 +276,7 @@ Every event shares a common envelope; `payload` fields vary by `type`.
 }
 ```
 
-Design rule: **events carry ids only, never contact details** (email/phone). Those are owned by User Service; Notification Service fetches them on consume. This keeps Group Service from reaching into User Service at publish time and prevents stale contact data in the log.
+Design rule: **an event carries only data its producer owns.** Group Service owns `groupName`, so it is denormalized into the envelope (safe, authoritative, no cross-service fetch). It does *not* own contact details (email/phone) — those belong to User Service — so events **carry ids only, never contact details**; Notification Service fetches them from User Service on consume. This keeps Group Service from reaching into another service at publish time and prevents stale foreign data in the log. The trade-off is a synchronous Notification→User lookup per notification; acceptable because notification delivery is async (5-min SLA) and retryable, so a brief User Service outage delays rather than drops notifications.
 
 ### Event types and consumer behaviour
 
@@ -295,6 +295,8 @@ Design rule: **events carry ids only, never contact details** (email/phone). Tho
 ### Read-through fallback (cache miss)
 
 The event stream keeps the cache fresh incrementally but does not repopulate a cold or evicted cache. On a miss for `user:{userId}:groups`, Location Service calls Group Service's internal endpoint `GET /internal/users/{userId}/groups` (active memberships only), caches the result, and proceeds. Group Service's PostgreSQL remains the source of truth for membership; Kafka handles the deltas, read-through handles the baseline.
+
+> **Accepted race:** a read-through rebuild can interleave with an in-flight `group.events` delta (e.g. a stale `MEMBER_REMOVED` applied just after the rebuild re-populates the set, or a rebuild reading membership committed before a removal). We accept this rather than add distributed locking: the set self-corrects on the next event or the next cache miss, and the resulting window is bounded well within the 30-second location-consistency NFR. The worst case is a single location update fanned out to one too many / too few groups for that window.
 
 ---
 
