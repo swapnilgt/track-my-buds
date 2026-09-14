@@ -18,7 +18,7 @@ springDependencyManagement = "1.1.7"
 springCloud = "2024.0.0"
 mockk = "1.13.13"
 logstashEncoder = "8.0"
-testcontainers = "1.20.4"
+testcontainers = "1.21.4"
 firebaseAdmin = "9.4.3"
 postgis = "2023.1.0"
 

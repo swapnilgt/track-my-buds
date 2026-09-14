@@ -9,6 +9,12 @@ plugins {
 group = "com.trackmybuds"
 version = "0.0.1-SNAPSHOT"
 
+// Spring Boot's dependency-management plugin manages its own (older) Testcontainers
+// version and otherwise wins over the version.ref pinned in libs.versions.toml.
+// Overriding this property is Spring Boot's documented mechanism for bumping a
+// BOM-managed dependency: https://docs.spring.io/spring-boot/gradle-plugin/managing-dependencies.html#dependency-versions.overriding
+extra["testcontainers.version"] = libs.versions.testcontainers.get()
+
 kotlin {
     jvmToolchain(21)
 }
