@@ -19,7 +19,7 @@ replay_pid*
 *.war
 *.nar
 *.ear
-!gradle/wrapper/gradle-wrapper.jar
+!**/gradle/wrapper/gradle-wrapper.jar
 
 # ── Flutter / Dart (client-app) ──
 **/.dart_tool/
