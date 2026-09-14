@@ -1,6 +1,9 @@
 package com.trackmybuds.userservice.integration
 
+import com.trackmybuds.userservice.domain.repository.HeartbeatRepository
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
@@ -32,7 +35,16 @@ class PingIntegrationTest {
         }
     }
 
+    @Autowired
+    lateinit var heartbeatRepository: HeartbeatRepository
+
     @Test
     fun contextLoads() {
+    }
+
+    @Test
+    fun `findMarker returns the seeded heartbeat row`() {
+        val marker = heartbeatRepository.findMarker()
+        assertNotNull(marker)
     }
 }
