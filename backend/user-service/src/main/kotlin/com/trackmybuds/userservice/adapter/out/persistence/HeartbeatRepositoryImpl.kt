@@ -9,5 +9,5 @@ internal class HeartbeatRepositoryImpl(
     private val jpaRepository: HeartbeatJpaRepository,
 ) : HeartbeatRepository {
     override fun findMarker(): Heartbeat? =
-        jpaRepository.findAll().firstOrNull()?.toDomain()
+        jpaRepository.findFirstByOrderByIdAsc()?.toDomain()
 }

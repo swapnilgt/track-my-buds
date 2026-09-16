@@ -11,7 +11,8 @@ internal class PingUseCaseImpl(
     @Value("\${spring.application.name}") private val serviceName: String,
 ) : PingUseCase {
     override fun ping(): Pong {
-        val status = if (heartbeatRepository.findMarker() != null) "UP" else "DOWN"
-        return Pong(service = serviceName, status = status, dbCheckedAt = Instant.now())
+        // Touch the database so a broken datasource surfaces as a 5xx here rather than a false UP.
+        heartbeatRepository.findMarker()
+        return Pong(service = serviceName, status = "UP", dbCheckedAt = Instant.now())
     }
 }

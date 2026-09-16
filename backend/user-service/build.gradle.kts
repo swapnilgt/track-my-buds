@@ -19,6 +19,14 @@ kotlin {
     jvmToolchain(21)
 }
 
+// kotlin-jpa adds a no-arg constructor for @Entity, but neither it nor kotlin-spring
+// opens entity classes; Hibernate needs them non-final to create lazy proxies.
+allOpen {
+    annotation("jakarta.persistence.Entity")
+    annotation("jakarta.persistence.MappedSuperclass")
+    annotation("jakarta.persistence.Embeddable")
+}
+
 repositories {
     mavenCentral()
 }
@@ -38,7 +46,9 @@ dependencies {
 
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.mockk)
-    testImplementation(platform(libs.testcontainers.bom))
+    // Testcontainers module versions come from Spring Boot's dependency management,
+    // pinned to the catalog value via extra["testcontainers.version"] above — so an
+    // explicit BOM platform import is redundant.
     testImplementation(libs.testcontainers.junit.jupiter)
     testImplementation(libs.testcontainers.postgresql)
 }

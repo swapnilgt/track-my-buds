@@ -206,7 +206,7 @@ Each service is a **standalone Gradle build** (its own `settings.gradle.kts` and
 | **Presentation layer** | Screens + BLoC (events, states) — stateful, UI-driven | REST controllers + DTOs — stateless, request/response |
 | **State management** | BLoC manages UI state across events | None — each HTTP request is independent and stateless |
 | **Adapter organisation** | `implementation/data/datasource/local\|remote\|mock/` — grouped by datasource type under a shared implementation layer | `adapter/in/web\|messaging` and `adapter/out/persistence\|cache\|web\|messaging\|mock` — split by direction (inbound vs outbound) |
-| **Mapper placement** | Shared `mapper/` folder under implementation | Co-located with the adapter that owns the mapping: infrastructure mappers in `adapter/out/<technology>/`, DTO mappers in `adapter/in/web/` |
+| **Mapper placement** | Shared `mapper/` folder under implementation | Co-located with the adapter that owns the mapping — directly in the adapter package or grouped in a `mapper/` sub-package: infrastructure mappers under `adapter/out/<technology>/`, DTO mappers under `adapter/in/web/` |
 | **Mapper library** | Manual mappers | Hand-written Kotlin extension functions (`fun A.toB()`) — no library; constructor-based construction gives compile-time "missing field" safety for domain/DTOs |
 | **Messaging** | Not applicable | `adapter/in/messaging/` for Kafka consumers; `adapter/out/messaging/` for Kafka producers |
 | **Environment config** | Environment-specific Dart files | Spring profiles via `application-{profile}.yml`; active profile set by `SPRING_PROFILES_ACTIVE` |
