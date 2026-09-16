@@ -19,7 +19,7 @@ These apply to both the backend (Kotlin / Spring Boot) and the client app (Flutt
 ## Error handling
 - The domain layer throws **domain-specific** exceptions (e.g. `MemberNotFoundException`, `LastOwnerException`) — never framework or vendor exceptions.
 - Adapters translate infrastructure/vendor failures into domain exceptions **at the boundary**. A `SQLException`, a Firebase SDK exception, or an S3 error must not propagate upward as-is.
-- The inbound web adapter maps domain exceptions to **RFC 7807 Problem Details** responses via a single centralized handler (`@RestControllerAdvice` on the backend), consistent with `api_contract.md`. HTTP status is decided there, not in use cases.
+- The inbound web adapter maps domain exceptions to **RFC 7807 Problem Details** responses via a single centralized handler (`@RestControllerAdvice` on the backend), consistent with `api_contract.md`. HTTP status is decided there, not in use cases. For the concrete Spring pattern (extend `ResponseEntityExceptionHandler`, enable `spring.mvc.problemdetails.enabled`), see `spring_best_practices.md`.
 - Validate inputs at the edge and fail fast — Bean Validation on request DTOs (backend); validate before hitting a use case. Do not let invalid data reach the domain.
 - Never swallow an exception silently. If it is caught and handled, log it with enough context (ids, operation) at the point of handling; if it cannot be handled locally, let it propagate to the boundary handler.
 - **Client:** repositories return typed success/failure results; BLoCs translate those into explicit UI states. Raw exceptions never reach widgets.

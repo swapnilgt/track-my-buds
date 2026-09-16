@@ -2,6 +2,7 @@
 - When making a decision on tech stack always ask the user before making the final decision. All the decisions regarding the tech stack that needs to be used should be referred from `tech_stack.md`. Tech stack includes things like decision on libraries used to networking, logging, database choices, dependency injection library choices and similar things.
 - For user facing app, use the `clean_arch_flutter_developer_context.md` on decision regarding the low level design and directory structure.
 - For backend services, use the `clean_arch_backend_developer_context.md` on decision regarding the low level design and directory structure.
+- For backend services, also follow `spring_best_practices.md` for Spring Boot / Kotlin-Spring specific conventions (exception handling, JPA entity setup, dependency-version overrides).
 - High level architecture details are available in `high_level_architecture.md`.
 - Domain model (entities, fields, relationships, business rules) is available in `domain_model.md`.
 - Client-facing REST/WebSocket API contract is available in `api_contract.md`.

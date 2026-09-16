@@ -2,7 +2,7 @@
 
 We are following clean architecture for all backend services. Services are written in **Kotlin** on Spring Boot. Each service lives in its own directory under `backend/<service-name>/`. The Kotlin source root for each service is `src/main/kotlin/com/trackmybuds/<service-name>/`. All package paths below are relative to that root.
 
-Whenever generating code, use the structure described in this document.
+Whenever generating code, use the structure described in this document. For Spring Boot / Kotlin-Spring specific patterns (exception handling, JPA entity setup, dependency-version overrides), follow `spring_best_practices.md`.
 
 ---
 
@@ -118,6 +118,12 @@ Rules:
 - Always use **constructor injection** — declare dependencies in the class's primary constructor. Never use field injection (`@Autowired` / `lateinit` on properties).
 - Beans are auto-discovered via Spring's component scan. Use `@Service`, `@Component`, and `@Repository` on implementation classes.
 - Explicit bean wiring goes in `@Configuration` classes inside the `config` package.
+
+## Visibility (Kotlin `internal`)
+- Mark **implementation classes `internal`** — they are not part of any consumed API: use-case implementations (`@Service`), outbound adapter implementations (`@Repository`, cache / messaging / identity adapters), inbound web controllers, the `@RestControllerAdvice`, and mapper functions.
+- Keep **`public`**: domain entities, port interfaces (the `repository` / `gateway` / `usecase` interfaces), request/response DTOs, JPA entity models, and Spring Data repository interfaces — these are the intended API surface and/or are read by frameworks. **All methods stay `public`**: an override cannot be less visible than its public interface, and framework-reflected methods must remain public.
+- **Never make framework-reflected members `internal`.** Kotlin name-mangles `internal` members (e.g. `getStatus$user_service`), which breaks reflection-based frameworks that look them up by plain name — Jackson (DTO getters), Hibernate (entity accessors), and Spring MVC (`@GetMapping` / `@ExceptionHandler` handler methods). An `internal` *class* is safe (it compiles to a public, un-mangled class name); an `internal` *member a framework reflects on* is not.
+- `internal` is **module-scoped**, so within a single-module service it does **not** enforce clean-arch layer boundaries (Kotlin has no package-private). Treat it as an intent signal ("not public API"), not as boundary enforcement.
 
 ---
 
