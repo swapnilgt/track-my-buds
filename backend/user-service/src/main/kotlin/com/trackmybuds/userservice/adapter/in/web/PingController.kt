@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
-class PingController(
+internal class PingController(
     private val pingUseCase: PingUseCase,
 ) {
     @GetMapping("/ping")

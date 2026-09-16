@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service
 import java.time.Instant
 
 @Service
-class PingUseCaseImpl(
+internal class PingUseCaseImpl(
     private val heartbeatRepository: HeartbeatRepository,
     @Value("\${spring.application.name}") private val serviceName: String,
 ) : PingUseCase {
