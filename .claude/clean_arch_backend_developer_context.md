@@ -34,7 +34,7 @@ Whenever generating code, use the structure described in this document. For Spri
     - `identity` — Identity-provider gateway implementation (Firebase today). Implements the `domain/gateway` identity ports; the **only** place identity-provider SDK types may appear. See "Identity Provider" below.
     - `web` — HTTP client implementations for other external REST APIs. Contains the client class and its mapper.
     - `messaging` — Kafka producers. Called directly by controllers after a successful use case execution. Present only in services that publish Kafka events (e.g. Group Service).
-    - `mock` — Mock implementations of domain `repository` / `gateway` ports. Used in unit tests instead of real infrastructure.
+    - `mock` — Hand-written in-memory implementations of `domain/repository` / `domain/gateway` ports used as test doubles. These live in the **test** source set (`src/test/kotlin/.../adapter/out/mock/`), **not** `src/main`, so they never ship in the production jar.
 - Each additional external provider (push, email, SMS, object storage) gets its own `adapter/out/<capability>` sub-package implementing the corresponding `domain/gateway` port, following the identity-provider pattern below.
 
 ### Config
@@ -148,8 +148,7 @@ backend/<service-name>/
 │   │   │   │       ├── cache/          (Redis impls, mappers)
 │   │   │   │       ├── identity/       (identity-provider adapter — Firebase today)
 │   │   │   │       ├── web/            (HTTP clients for other external REST APIs)
-│   │   │   │       ├── messaging/      (only if service publishes Kafka events)
-│   │   │   │       └── mock/           (mock impls for unit tests)
+│   │   │   │       └── messaging/      (only if service publishes Kafka events)
 │   │   │   └── config/
 │   │   └── resources/
 │   │       ├── application.yml
@@ -159,7 +158,8 @@ backend/<service-name>/
 │   └── test/
 │       └── kotlin/com/trackmybuds/<service-name>/
 │           ├── unit/
-│           └── integration/
+│           ├── integration/
+│           └── adapter/out/mock/   (hand-written in-memory test doubles for ports)
 ├── build.gradle.kts
 ├── settings.gradle.kts
 ├── gradlew  gradlew.bat  gradle/wrapper/
@@ -181,10 +181,10 @@ Each service is a **standalone Gradle build** (its own `settings.gradle.kts` and
 ## 4. Testing
 - Use JUnit 5 for all tests.
 - Use MockK for mocking dependencies in unit tests (Kotlin-native; mocks final-by-default classes without extra config).
-- Unit tests go in `src/test/java/.../unit/` and test individual classes in isolation.
-- Integration tests go in `src/test/java/.../integration/` and use `@SpringBootTest` or `@DataJpaTest` to test with real Spring context or real DB layer.
+- Unit tests go in `src/test/kotlin/.../unit/` and test individual classes in isolation.
+- Integration tests go in `src/test/kotlin/.../integration/` and use `@SpringBootTest` or `@DataJpaTest` to test with real Spring context or real DB layer.
 - Integration tests run their backing infrastructure with **Testcontainers** — a real PostgreSQL+PostGIS container for persistence/spatial tests, and real Redis / Kafka / MinIO containers where the code under test uses them. Do not substitute in-memory fakes (e.g. H2) for these: PostGIS spatial SQL, Redis Pub/Sub, and Kafka semantics must be exercised against the real engines. Docker is therefore a test-time dependency.
-- Mock implementations in `adapter/out/mock/` implement `domain/repository` or `domain/gateway` interfaces and are used in unit tests to replace real infrastructure without starting a Spring context.
+- Hand-written test-double implementations live in the **test** source set under `src/test/kotlin/.../adapter/out/mock/` — they implement `domain/repository` or `domain/gateway` interfaces and are used in unit tests to replace real infrastructure without starting a Spring context. Keeping them in `src/test` (not `src/main`) ensures they never ship in the production jar.
 
 ---
 
