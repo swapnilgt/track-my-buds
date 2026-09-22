@@ -1,0 +1,6 @@
+CREATE TABLE heartbeat (
+    id         UUID PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO heartbeat (id) VALUES ('00000000-0000-0000-0000-000000000001');
