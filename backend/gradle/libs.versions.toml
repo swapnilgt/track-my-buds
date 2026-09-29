@@ -21,6 +21,7 @@ logstashEncoder = "8.0"
 testcontainers = "1.21.4"
 firebaseAdmin = "9.4.3"
 postgis = "2023.1.0"
+wiremock = "3.13.2"
 
 [libraries]
 # --- Spring Boot starters (versions managed by the Spring Boot BOM) ---
@@ -32,7 +33,15 @@ spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 
 # --- Spring Cloud Gateway (version managed by the Spring Cloud BOM) ---
-spring-cloud-starter-gateway = { module = "org.springframework.cloud:spring-cloud-starter-gateway" }
+# NOTE: on the springCloud 2024.0.x train (paired with Spring Boot 3.4.x), the servlet
+# (MVC) gateway starter artifact is still named "spring-cloud-starter-gateway-mvc" —
+# it was renamed to "spring-cloud-starter-gateway-server-webmvc" starting with gateway
+# 4.3.0 / springCloud 2025.0.0, which requires Spring Boot 3.5.x. The catalog alias
+# below keeps the forward-looking name (matching the artifact ID used from 4.3.0 on)
+# so call sites don't need to change on a future springCloud/springBoot bump, but it
+# currently resolves to the 4.2.x-train coordinate compatible with our pinned Boot 3.4.1.
+spring-cloud-dependencies = { module = "org.springframework.cloud:spring-cloud-dependencies", version.ref = "springCloud" }
+spring-cloud-starter-gateway-server-webmvc = { module = "org.springframework.cloud:spring-cloud-starter-gateway-mvc" }
 
 # --- Messaging ---
 spring-kafka = { module = "org.springframework.kafka:spring-kafka" }
@@ -65,6 +74,9 @@ testcontainers-minio = { module = "org.testcontainers:minio" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 jackson-module-kotlin = { module = "com.fasterxml.jackson.module:jackson-module-kotlin" }
 kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
+
+# --- Testing: WireMock ---
+wiremock-standalone = { module = "org.wiremock:wiremock-standalone", version.ref = "wiremock" }
 
 [bundles]
 observability = ["micrometer-registry-prometheus", "micrometer-tracing-bridge-brave", "zipkin-reporter-brave"]
