@@ -10,11 +10,17 @@
         </root>
     </springProfile>
 
-    <!-- Info-level logging on preprod, per environments.md -->
-    <springProfile name="preprod">
+    <!-- Structured JSON appender shared by preprod and prod, defined once regardless of
+         which (or both) are active — avoids a duplicate-name "JSON" appender definition
+         if both profiles were ever active simultaneously. Levels differ per profile below. -->
+    <springProfile name="preprod,prod">
         <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
             <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
         </appender>
+    </springProfile>
+
+    <!-- Info-level logging on preprod, per environments.md -->
+    <springProfile name="preprod">
         <root level="INFO">
             <appender-ref ref="JSON"/>
         </root>
@@ -22,9 +28,6 @@
 
     <!-- Warn-level logging on prod (errors and warnings only; no debug/info output), per environments.md -->
     <springProfile name="prod">
-        <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
-            <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
-        </appender>
         <root level="WARN">
             <appender-ref ref="JSON"/>
         </root>
