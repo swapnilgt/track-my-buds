@@ -23,6 +23,7 @@ jobs:
         # One standalone Gradle build per service. Add new services here.
         service:
           - user-service
+          - gateway
     steps:
       - name: Checkout
         uses: actions/checkout@v4

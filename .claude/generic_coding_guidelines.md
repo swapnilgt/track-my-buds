@@ -24,6 +24,12 @@ These apply to both the backend (Kotlin / Spring Boot) and the client app (Flutt
 - Never swallow an exception silently. If it is caught and handled, log it with enough context (ids, operation) at the point of handling; if it cannot be handled locally, let it propagate to the boundary handler.
 - **Client:** repositories return typed success/failure results; BLoCs translate those into explicit UI states. Raw exceptions never reach widgets.
 
+## Base URLs & path joining
+- Canonical convention: a configured **base URL has no trailing slash**; a **path always has a leading slash**. `base + path` then yields exactly one slash (`http://host:8081` + `/ping` → `http://host:8081/ping`).
+- Any base URL that comes from external config (an env var, an operator-supplied value) is **not guaranteed to conform** — normalize it at the boundary (e.g. strip a trailing slash) rather than assuming it does.
+- Prefer a real URI-joining API (`java.net.URI.resolve()`, Spring's `UriComponentsBuilder`) over raw string concatenation wherever you control the join — it handles slash boundaries, encoding, and query strings per RFC 3986 instead of ad hoc string math.
+- When a third-party library does the joining for you (e.g. Spring Cloud Gateway's routing), verify its actual behavior against the library's source before assuming a classic string-concatenation bug applies — see `spring_best_practices.md` → "API Gateway routing: URI construction" for a case where it didn't.
+
 ## Testing — unit vs integration
 - **Always include test cases with the new code written.** Every feature PR ships with its tests.
 - **Unit tests** cover pure logic in isolation — use cases, domain rules, mappers, validators — with ports replaced by mocks (`adapter/out/mock` implementations or MockK). No Spring context, no Docker, no network. These are the bulk of the tests and must stay fast.

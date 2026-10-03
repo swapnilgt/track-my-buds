@@ -4,6 +4,8 @@ We are following clean architecture for all backend services. Services are writt
 
 Whenever generating code, use the structure described in this document. For Spring Boot / Kotlin-Spring specific patterns (exception handling, JPA entity setup, dependency-version overrides), follow `spring_best_practices.md`.
 
+> **Infrastructure-only services** (the API Gateway) are thin routing/edge apps with no domain, use cases, or persistence — they are **exempt** from the `domain`/`adapter` layering below. They contain only an application entry point, `config` (e.g. route definitions), and resources.
+
 ---
 
 ## 1. Architecture Components

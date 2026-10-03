@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!-- Debug-level logging on local, per environments.md -->
+    <springProfile name="local">
+        <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+        <root level="DEBUG">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <!-- Structured JSON appender shared by preprod and prod, defined once regardless of
+         which (or both) are active — avoids a duplicate-name "JSON" appender definition
+         if both profiles were ever active simultaneously. Levels differ per profile below. -->
+    <springProfile name="preprod,prod">
+        <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
+        </appender>
+    </springProfile>
+
+    <!-- Info-level logging on preprod, per environments.md -->
+    <springProfile name="preprod">
+        <root level="INFO">
+            <appender-ref ref="JSON"/>
+        </root>
+    </springProfile>
+
+    <!-- Warn-level logging on prod (errors and warnings only; no debug/info output), per environments.md -->
+    <springProfile name="prod">
+        <root level="WARN">
+            <appender-ref ref="JSON"/>
+        </root>
+    </springProfile>
+
+    <!-- No active profile (e.g. tests): plain console so logs are visible. -->
+    <springProfile name="!local &amp; !preprod &amp; !prod">
+        <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+</configuration>
