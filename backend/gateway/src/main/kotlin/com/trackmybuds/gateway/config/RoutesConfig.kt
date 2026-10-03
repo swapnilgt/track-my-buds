@@ -21,9 +21,13 @@ class RoutesConfig {
     // the target URI request attribute first, so it cannot be used alone.
     // HandlerFunctions.http(String) is present in 4.2.0 and is the direct
     // equivalent for a single static target: it constructs the same
-    // LookupProxyExchangeHandlerFunction with the URI supplied up front,
-    // proxying the incoming request (path/method/body preserved) to
-    // userServiceUri.
+    // LookupProxyExchangeHandlerFunction with the URI supplied up front.
+    // The actual proxying (in ProxyExchangeHandlerFunction) builds the outbound
+    // URI from the INCOMING request's own URI via UriComponentsBuilder, only
+    // replacing scheme/host/port from userServiceUri — the path/query of the
+    // incoming request is preserved as-is, and userServiceUri's own path (if
+    // any) is never read. See GatewayRoutingTrailingSlashTest for the verified
+    // consequence: a trailing slash on userServiceUri is harmless.
     @Bean
     fun pingRoute(
         @Value("\${gateway.user-service-uri}") userServiceUri: String,
