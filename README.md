@@ -1,3 +1,6 @@
+[![Backend CI](https://github.com/swapnilgt/track-my-buds/actions/workflows/backend-ci.yml/badge.svg?branch=main)](https://github.com/swapnilgt/track-my-buds/actions/workflows/backend-ci.yml)
+[![codecov](https://codecov.io/github/swapnilgt/track-my-buds/branch/main/graph/badge.svg)](https://app.codecov.io/github/swapnilgt/track-my-buds)
+
 # Overview
 Track my buds is an application that can help track your near and dear ones.
 

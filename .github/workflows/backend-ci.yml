@@ -9,6 +9,14 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/backend-ci.yml'
+  # Also run on pushes to main (e.g. after a PR merges) so the build-status badge and
+  # Codecov's main-branch coverage number reflect main's actual current state, not just
+  # the last PR run.
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
 
 permissions:
   contents: read
@@ -43,6 +51,18 @@ jobs:
       - name: Build and test
         working-directory: backend/${{ matrix.service }}
         run: ./gradlew --no-daemon build
+
+      # Uploads this service's JaCoCo XML report. Codecov combines the per-service
+      # uploads for the same commit (tagged by "flags") into one overall repo coverage
+      # number, since each service is a separate, independent Gradle build.
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: backend/${{ matrix.service }}/build/reports/jacoco/test/jacocoTestReport.xml
+          flags: ${{ matrix.service }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
       - name: Upload test reports
         if: ${{ failure() }}
