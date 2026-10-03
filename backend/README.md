@@ -52,6 +52,24 @@ cd user-service
 
 The wrapper downloads the pinned Gradle version on first run; no system Gradle is needed.
 
+## Quick start (Windows / PowerShell)
+
+To start everything at once — Docker, local infra, and every backend service, each in
+its own window — run from `backend/`:
+
+```powershell
+.\scripts\windows\start-local.ps1
+```
+
+Safe to re-run: it skips infra/services that are already up and reports their health.
+Update `$Services` in `scripts/windows/start-local.ps1` when a new service is added
+(e.g. M1's `auth-service`) — see the comments in that file. To run just one service in
+its own window: `.\scripts\windows\run-service.ps1 -ServicePath user-service -ServiceName user-service`.
+
+These scripts are Windows-specific (PowerShell + `gradlew.bat` + Windows-only cmdlets);
+a Mac/Linux (Bash) equivalent doesn't exist yet — add one under `scripts/<platform>/`
+if/when needed, following the same pattern.
+
 ## Local infrastructure
 
 Bring up the shared local stack from this directory (requires a running Docker
