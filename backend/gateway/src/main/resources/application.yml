@@ -21,3 +21,10 @@ management:
     health:
       probes:
         enabled: true
+  # Same reasoning as gateway.user-service-uri above: read ZIPKIN_ENDPOINT regardless
+  # of active profile, so a missing/wrong SPRING_PROFILES_ACTIVE can't silently fall
+  # back to Micrometer's own built-in default instead of this (coincidentally
+  # identical) localhost default while the env var is set and ignored.
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
