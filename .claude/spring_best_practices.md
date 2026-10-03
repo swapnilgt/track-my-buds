@@ -94,3 +94,29 @@ extra["testcontainers.version"] = libs.versions.testcontainers.get()
 
 Verify the bump took effect (e.g. `./gradlew dependencies` or a passing test on the new version) —
 editing the catalog alone silently has no effect for BOM-managed libraries.
+
+---
+
+## API Gateway routing: URI construction
+
+`gateway.user-service-uri` (and any similar routed-service URI config) does **not** need its
+trailing slash stripped before being passed to `HandlerFunctions.http(uri)` — a trailing slash is
+harmless. Verified against the actual `spring-cloud-gateway-server-mvc` v4.2.0 source: the route's
+`ProxyExchangeHandlerFunction` builds the outbound request via
+
+```java
+UriComponentsBuilder.fromUri(serverRequest.uri())   // the INCOMING request's own URI, path included
+    .scheme(uri.getScheme())                        // only scheme/host/port come from the configured base
+    .host(uri.getHost())
+    .port(uri.getPort())
+    ...
+```
+
+The configured base URI's **path is never read** — only scheme/host/port are taken from it, and the
+path/query actually forwarded is always the *incoming* request's own. So there is no base-string +
+path-string concatenation happening, and a trailing slash on the base cannot produce a `//`
+double-slash. This is a case of general base-URL/path-joining caution (see
+`generic_coding_guidelines.md` → "Base URLs & path joining") **not applying** once you check the
+specific library's actual join strategy — confirmed by `backend/gateway/.../GatewayRoutingTrailingSlashTest.kt`,
+which pins this behavior as a regression guard. Re-verify this note if the gateway dependency is
+ever bumped past 4.2.x, since a newer version could change the join strategy.
