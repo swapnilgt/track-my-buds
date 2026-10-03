@@ -58,13 +58,17 @@ To start everything at once — Docker, local infra, and every backend service, 
 its own window — run from `backend/`:
 
 ```powershell
-.\scripts\start-local.ps1
+.\scripts\windows\start-local.ps1
 ```
 
 Safe to re-run: it skips infra/services that are already up and reports their health.
-Update `$Services` in `scripts/start-local.ps1` when a new service is added (e.g. M1's
-`auth-service`) — see the comments in that file. To run just one service in its own
-window: `.\scripts\run-service.ps1 -ServicePath user-service -ServiceName user-service`.
+Update `$Services` in `scripts/windows/start-local.ps1` when a new service is added
+(e.g. M1's `auth-service`) — see the comments in that file. To run just one service in
+its own window: `.\scripts\windows\run-service.ps1 -ServicePath user-service -ServiceName user-service`.
+
+These scripts are Windows-specific (PowerShell + `gradlew.bat` + Windows-only cmdlets);
+a Mac/Linux (Bash) equivalent doesn't exist yet — add one under `scripts/<platform>/`
+if/when needed, following the same pattern.
 
 ## Local infrastructure
 

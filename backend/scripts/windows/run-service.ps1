@@ -6,7 +6,7 @@
     Meant to be run in its own window (start-local.ps1 does this for every service in
     its list), but works standalone too - handy for restarting just one service:
 
-        .\run-service.ps1 -ServicePath ..\user-service -ServiceName user-service
+        .\run-service.ps1 -ServicePath ..\..\user-service -ServiceName user-service
 
 .PARAMETER ServicePath
     Path to the service's directory (the one containing gradlew.bat).

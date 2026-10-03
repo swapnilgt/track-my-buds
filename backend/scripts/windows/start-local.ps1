@@ -34,7 +34,7 @@ param(
 # would abort this script even though the command itself succeeded. The explicit
 # `throw` calls below are what should actually stop execution.
 $ScriptDir  = $PSScriptRoot
-$BackendDir = Split-Path -Parent $ScriptDir
+$BackendDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)   # windows/ -> scripts/ -> backend/
 
 # ---------------------------------------------------------------------------
 # Services to start locally. Add a new entry here as new services are added
