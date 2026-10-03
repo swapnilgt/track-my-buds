@@ -2,18 +2,30 @@
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
+    <!-- Debug-level logging on local, per environments.md -->
     <springProfile name="local">
         <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
-        <root level="INFO">
+        <root level="DEBUG">
             <appender-ref ref="CONSOLE"/>
         </root>
     </springProfile>
 
-    <springProfile name="preprod,prod">
+    <!-- Info-level logging on preprod, per environments.md -->
+    <springProfile name="preprod">
         <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
             <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
         </appender>
         <root level="INFO">
+            <appender-ref ref="JSON"/>
+        </root>
+    </springProfile>
+
+    <!-- Warn-level logging on prod (errors and warnings only; no debug/info output), per environments.md -->
+    <springProfile name="prod">
+        <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
+        </appender>
+        <root level="WARN">
             <appender-ref ref="JSON"/>
         </root>
     </springProfile>
